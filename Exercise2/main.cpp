@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 	Matrix  M;
 	Matrix  N;
 	Matrix  P;
-	int size = 512;
+	int size = 1024;
 	
 	srand(52);
 	
