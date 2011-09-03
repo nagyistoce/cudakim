@@ -1,0 +1,10 @@
+# CUDA_PROFILE_LOG_VERSION 2.0
+# CUDA_PROFILE_CSV 1
+# CUDA_DEVICE 0 GeForce 9400
+gpustarttimestamp,method,gputime,cputime,occupancy,gridSizeX,gridSizeY,blockSizeX,blockSizeY,blockSizeZ,dynSmemPerBlock,staSmemPerBlock,registerPerThread,streamID,localblocksize,memTransferSize,memtransferhostmemtype,branch,divergent_branch,instructions,warp_serialize
+123f259659d55760,memcpyHtoD,143,363,,,,,,,,,,0,0,262144,0
+123f259659da72e0,memcpyHtoD,137,334,,,,,,,,,,0,0,262144,0
+123f259659df37e0,memcpyHtoD,138,316,,,,,,,,,,0,0,262144,0
+123f259659e91100,_Z15MatrixMulKernel6MatrixS_S_,24072,26064,1,16,16,16,16,1,0,64,9,0,-1,,0,266240,0,1869848,0
+123f25965b5c21e0,_Z21MatrixMulKernelShared6MatrixS_S_,12050,13066,1,16,16,16,16,1,0,2112,9,0,-1,,0,53248,0,856090,0
+123f25965c17cac0,memcpyDtoH,142,375,,,,,,,,,,0,0,262144,0
