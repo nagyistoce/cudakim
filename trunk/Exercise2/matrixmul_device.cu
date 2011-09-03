@@ -51,7 +51,9 @@
 #define TILE_WIDTH 16
 
 // global scope
-texture<float, 1> tex;
+// declare texture reference for 1D float texture
+texture<float, 1> texM;
+texture<float, 1> texN;
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Simple test kernel for device functionality
@@ -74,16 +76,15 @@ __global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P) {
 }
 
 // Matrix multiplication kernel texture thread specification
-__global__ void MatrixMulTexKernel(Matrix M, Matrix N, Matrix P) {
+__global__ void MatrixMulTexKernel(int Mwidth, int Nwidth, Matrix P) {
 
 	/// *** INSERT CODE ***
 	int Row = blockIdx.y*TILE_WIDTH + threadIdx.y;
 	int Col = blockIdx.x*TILE_WIDTH + threadIdx.x;
-	//float val = tex1Dfetch(tex, index);
 
 	float Pvalue = 0;
-	for (int k = 0; k < M.width; ++k)
-		Pvalue += M.elements[Row*M.width+k] * N.elements[k*N.width+Col];
+	for (int k = 0; k < Mwidth; ++k)
+		Pvalue += tex1Dfetch(texM, Row*Mwidth+k) * tex1Dfetch(texN, k*Nwidth+Col);
 
 	P.elements[Row*P.width+Col] = Pvalue;
 
@@ -275,15 +276,23 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P) {
     StopTimer(timerCUDA);
     printf("Matrix multiplication processing time : %f ms \n", GetTimer(timerCUDA));
 
-    // in function
-    const cudaChannelFormatDesc desc = cudaCreateChannelDesc<float>();
-    //cudaBindTexture(0, &tex, dataDevPtr, &desc, num_bytes);
+    // Create texture for N matrix
+    const cudaChannelFormatDesc descN = cudaCreateChannelDesc<float>();
+    size_t numN_bytes = Nd.width*Nd.height*sizeof(float);
+    cudaBindTexture(NULL, &texN, (const void*)Nd.elements, &descN, numN_bytes);
+
+    // Create texture for M matrix
+    const cudaChannelFormatDesc descM = cudaCreateChannelDesc<float>();
+    size_t numM_bytes = Md.width*Md.height*sizeof(float);
+    cudaBindTexture(NULL, &texM, (const void*)Md.elements, &descM, numM_bytes);
+
     // Launch the device computation threads using shared memory
     RestartTimer(timerCUDA);
-    MatrixMulTexKernel<<< dimGrid, dimBlock >>>(Md, Nd, Pd);
-    //cudaUnbindTexture(tex);
+    MatrixMulTexKernel<<< dimGrid, dimBlock >>>(Md.width, Nd.width, Pod);
     StopTimer(timerCUDA);
     printf("Texture memory processing time : %f ms \n", GetTimer(timerCUDA));
+    cudaUnbindTexture(texN);
+    cudaUnbindTexture(texM);
 
     // Launch the device computation threads using shared memory
     RestartTimer(timerCUDA);
@@ -294,7 +303,7 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P) {
 
     // Launch the device computation threads using shared memory with optimization
     RestartTimer(timerCUDA);
-    MatrixMulKernelSharedOpt<<< dimGrid, dimBlock >>>(Md, Nd, Pod);
+    MatrixMulKernelSharedOpt<<< dimGrid, dimBlock >>>(Md, Nd, Pd);
     StopTimer(timerCUDA);
     printf("Shared memory optimized processing time : %f ms \n", GetTimer(timerCUDA));
 
