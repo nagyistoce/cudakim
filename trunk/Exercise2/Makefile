@@ -1,50 +1,69 @@
-################################################################################
-#
-# Copyright 1993-2006 NVIDIA Corporation.  All rights reserved.
-#
-# NOTICE TO USER:   
-#
-# This source code is subject to NVIDIA ownership rights under U.S. and 
-# international Copyright laws.  
-#
-# NVIDIA MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE 
-# CODE FOR ANY PURPOSE.  IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR 
-# IMPLIED WARRANTY OF ANY KIND.  NVIDIA DISCLAIMS ALL WARRANTIES WITH 
-# REGARD TO THIS SOURCE CODE, INCLUDING ALL IMPLIED WARRANTIES OF 
-# MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE.   
-# IN NO EVENT SHALL NVIDIA BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL, 
-# OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS 
-# OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE 
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE 
-# OR PERFORMANCE OF THIS SOURCE CODE.  
-#
-# U.S. Government End Users.  This source code is a "commercial item" as 
-# that term is defined at 48 C.F.R. 2.101 (OCT 1995), consisting  of 
-# "commercial computer software" and "commercial computer software 
-# documentation" as such terms are used in 48 C.F.R. 12.212 (SEPT 1995) 
-# and is provided to the U.S. Government only as a commercial end item.  
-# Consistent with 48 C.F.R.12.212 and 48 C.F.R. 227.7202-1 through 
-# 227.7202-4 (JUNE 1995), all U.S. Government End Users acquire the 
-# source code with only those rights set forth herein.
-#
-################################################################################
-#
-# Build script for project
-#
-################################################################################
+NVCC=nvcc
+CC=gcc
+LINK=g++
 
-# Add source files here
-EXECUTABLE	:= matrixmul
-# Cuda source files (compiled with cudacc)
-CUFILES		:= matrixmul_device.cu
-CUDEPS		:= matrixmul_device.h
-# C/C++ source files (compiled with gcc / c++)
-CCFILES		:= main.cpp
-CFILES      := matrix.c matrixmul_gold.c
+INCLUDES = -I. -I../libs -I/usr/local/cuda/include
+LIBS = -L/usr/local/cuda/lib -lcuda -lcudart
+GL_LIBS = -lGLEW
+
+# detect OS
+OSUPPER = $(shell uname -s 2>/dev/null | tr [:lower:] [:upper:])
+# 'linux' is output for Linux system, 'darwin' for OS X
+DARWIN = $(strip $(findstring DARWIN, $(OSUPPER)))
+ifneq ($(DARWIN),)
+    INCLUDES += -I/opt/local/include
+    LIBS += -L/opt/local/lib
+    GL_LIBS += -framework glut -framework OpenGL 
+    CUDA_SDK=/Developer/GPU\ Computing/C
+else
+    INCLUDES += -I/usr/include -I/usr/local/include
+    LIBS += -L/usr/lib -L/usr/local/lib
+    GL_LIBS += -L/usr/X11/lib -lglut -lGL -lGLU
+    CUDA_SDK=$(HOME)/NVIDIA_GPU_Computing_SDK/C
+endif
+
+# detect OS
+ARCHUPPER = $(shell uname -m 2>/dev/null | tr [:lower:] [:upper:])
+# 'linux' is output for Linux system, 'darwin' for OS X
+ARCH := $(strip $(findstring X86_64, $(ARCHUPPER)))
+ifneq ($(ARCH),)
+    LIB_ARCH = x86_64
+    NVCCFLAGS += -m64
+    ifneq ($(DARWIN),)
+        CXX_ARCH_FLAGS += -arch x86_64
+    else
+        CXX_ARCH_FLAGS += -m64
+    endif
+else
+    LIB_ARCH = i386
+    NVCCFLAGS += -m32
+    ifneq ($(DARWIN),)
+        CXX_ARCH_FLAGS += -arch i386
+    else
+        CXX_ARCH_FLAGS += -m32
+    endif
+endif
 
 
-################################################################################
-# Rules and targets
+INCLUDES += -I$(CUDA_SDK)/common/inc
+LIBS += -L$(CUDA_SDK)/lib -lcutil_$(LIB_ARCH)
 
-#include ../../common/common.mk
-include common.mk
+BINARY=main
+
+$(BINARY): $(BINARY).o matrix.o matrixmul_gold.o matrixmul_device.o
+	$(LINK) $(CXX_ARCH_FLAGS) $^ -o $(BINARY) $(LIBS) $(GL_LIBS)
+
+$(BINARY).o: $(BINARY).cpp
+	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
+
+matrix.o: matrix.c
+	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
+
+matrixmul_gold.o: matrixmul_gold.c
+	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
+
+matrixmul_device.o: matrixmul_device.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+clean:
+	rm -f *.o
+	rm -f $(BINARY)
