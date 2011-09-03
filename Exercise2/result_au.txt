@@ -1,0 +1,32 @@
+Device 0: [GeForce GTX 480]
+  Major revision number:            2
+  Minor revision number:            0
+  Total amount of global memory:    1609760768
+  Number of multiprocessors (SM):   15
+  Max. threads per multiprocessor   768
+  Max. blocks per multiprocessor    8
+  Execute multiple kernels:         yes
+  Constant memory:                  65536
+  Shared memory per block:          49152
+  Registers per block:              32768
+  Warp size:                        32
+  Max. threads per block:           1024
+  Max. dimension of block:          [1024,1024,64]
+  Max. dimension of grid:           [65535,65535,65535]
+  Max. memory pitch:                2147483647
+  Texture alignment:                512
+  Clock rate:                       1401000 Hz
+  Concurrent copy and exe:          yes
+
+Matrix multiplication M[1024,1024]
+Matrix multiplication N[1024,1024]
+Matrix multiplication P[1024,1024]
+Grid (Blocks)    [64,64]
+Threads in Block [16,16]
+Matrix multiplication processing time : 32.840000 ms 
+Texture memory processing time : 51.306000 ms 
+Shared memory processing time : 9.215000 ms 
+Shared memory optimized processing time : 9.417000 ms 
+GPU computation complete
+CPU computation complete
+Test PASSED
