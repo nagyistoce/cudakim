@@ -31,7 +31,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <shrUtils.h>
 
 // includes, project
 #include <cutil_inline.h>
@@ -82,8 +81,8 @@ loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* i
 
     if (res)
     {
-        shrLog("\nError %d: Image file not found or invalid!\n", res);
-        shrLog("Press ENTER to exit...\n");
+        printf("\nError %d: Image file not found or invalid!\n", res);
+        printf("Press ENTER to exit...\n");
         getchar();
 
         return 1;
@@ -98,14 +97,14 @@ loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* i
     //check image dimensions are multiples of BLOCK_SIZE
     if (ImgWidth % BLOCK_SIZE != 0 || ImgHeight % BLOCK_SIZE != 0)
     {
-        shrLog("\nError: Input image dimensions must be multiples of 8!\n");
-        shrLog("Press ENTER to exit...\n");
+        printf("\nError: Input image dimensions must be multiples of 8!\n");
+        printf("Press ENTER to exit...\n");
         getchar();
 
         return 1;
     }
     
-    shrLog("Image size [%d x %d], %d \n", ImgWidth, ImgHeight, *imgStride);
+    printf("Image size [%d x %d], %d \n", ImgWidth, ImgHeight, *imgStride);
     
     return 0;
 }
@@ -123,7 +122,7 @@ float MorphEdgeCUDA1(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size)
     // Allocation of memory for 2D source image in single precision format
     cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(float), Size.height));
     SrcStride /= sizeof(float);
-    shrLog("SrcStride %d\n", SrcStride);
+    printf("SrcStride %d\n", SrcStride);
 
     //copy source image from host memory to device
     cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(float),
@@ -143,8 +142,8 @@ float MorphEdgeCUDA1(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size)
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
 
-    shrLog("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    shrLog("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     //create and start CUDA timer
     unsigned int timerCUDA = 0;
@@ -251,10 +250,10 @@ main( int argc, char** argv)
 
     printf("Erode image\n");
     float TimeCUDA1 = MorphEdgeCUDA1(ImgSrc, ImgDst, ImgStride, ImgSize);
-    shrLog("Processing time (ErodeCUDA 1)    : %f ms \n", TimeCUDA1);
+    printf("Processing time (ErodeCUDA 1)    : %f ms \n", TimeCUDA1);
     
     //dump result of Gold 1 processing
-    shrLog("Success\nDumping result to %s...\n", EdgeImageFname);
+    printf("Success\nDumping result to %s...\n", EdgeImageFname);
     DumpBmpAsGray(EdgeImageFname, ImgDst, ImgStride, ImgSize);
     
     /* Template test

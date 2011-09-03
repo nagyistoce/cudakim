@@ -32,7 +32,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <shrUtils.h>
 #include <cutil_inline.h>
 
 #include "BmpUtil.h"
