@@ -1,0 +1,3 @@
+
+Error 1: Image file not found or invalid!
+Press ENTER to exit...
