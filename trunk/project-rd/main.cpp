@@ -17,7 +17,7 @@
 #else
 
 // Linux includes 
-#include <GL/glut.h>
+#include <GL/glew.h>
 #include <opengl/opengl_utilities.h>
 
 #include <cuda.h>
