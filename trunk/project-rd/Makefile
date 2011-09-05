@@ -2,7 +2,7 @@ NVCC=nvcc
 CC=gcc
 LINK=g++
 
-INCLUDES = -I. -I../libs -I/usr/local/cuda/include
+INCLUDES = -I. -I../../libs -I/usr/local/cuda/include
 LIBS = -L/usr/local/cuda/lib -lcuda -lcudart
 GL_LIBS = -lGLEW
 
