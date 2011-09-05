@@ -1,4 +1,23 @@
+#if defined(__APPLE__) || defined(MACOSX)
+// Mac includes
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <GL/glew.h>
+#include <GLUT/glut.h>
+
+#include <cuda_runtime.h>
+#include <cutil_inline.h>
+#include <cutil_gl_inline.h>
+#include <cuda_gl_interop.h>
+
+#include <rendercheck_gl.h>
+
+#else
+
+// Linux includes 
+#include <GL/glut.h>
 #include <opengl/opengl_utilities.h>
 
 #include <cuda.h>
@@ -9,6 +28,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#endif
 
 #include <rd_kernel.h>
 
