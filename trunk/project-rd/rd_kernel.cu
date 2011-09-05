@@ -62,8 +62,31 @@ void rd_kernel(unsigned int width, unsigned int height,
 	const unsigned int idx = co.y*width + co.x;
 
 	//
-	// THIS IS WHERE YOU NEED TO IMPLEMENT THE REACTION-DIFFUSION KERNEL
+	// REACTION-DIFFUSION KERNEL - Kim Bjerge's version
 	//
+        // Use registeres to save current values of U and V
+        float Ui = U[idx];
+        float Vi = V[idx];
+
+        // Skip computing first and last line in image
+        if (idx >= width && idx < width*(height-1))
+        {
+		// Computes the Laplacian operator for U and V - used values in x and y dimensions
+		//float laplacianU = Ui;
+		//float laplacianV = Vi;
+		float laplacianU = (U[idx+1] + U[idx-1] + U[idx+width] + U[idx-width] - 4 * Ui)/(dx*dx);
+		float laplacianV = (V[idx+1] + V[idx-1] + V[idx+width] + V[idx-width] - 4 * Vi)/(dx*dx);
+
+
+		// Computes the diffusion and reaction of the two chemicals reactants mixed together
+		float Uf = Du * laplacianU - Ui*pow(Vi,2) + F*(1 - Ui);
+		//float Uf = Du * laplacianU; // Difusion only
+		float Vf = Dv * laplacianV + Ui*pow(Vi,2) - (F + k)*Vi;
+
+		U[idx] = Ui + dt*Uf;
+		V[idx] = Vi + dt*Vf;
+        }
+        
 }
 
 /*
@@ -107,9 +130,17 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	}
 
 	// Experiment with different settings of these constants
+        /* Original values
 	const float dt = 1.0f;
 	const float dx = 2.0f;
 	const float Du = 0.0004f*((width*height)/100.0f);
+	const float Dv = 0.0002f*((width*height)/100.0f);
+	const float F = 0.012f; 
+	const float k = 0.052f;
+        */
+	const float dt = 1.0f;
+	const float dx = 2.0f;
+	const float Du = 0.00001f*((width*height)/100.0f);
 	const float Dv = 0.0002f*((width*height)/100.0f);
 	const float F = 0.012f; 
 	const float k = 0.052f;
