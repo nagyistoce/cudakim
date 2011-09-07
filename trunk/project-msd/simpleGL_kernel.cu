@@ -51,6 +51,12 @@
 #include <cuda/float_util.hcu>
 #include <cuda/float_util_device.hcu>
 
+
+//Calculte the Euclidian distance in a 3D space
+__device__ float norm(float3 i, float3 j) {
+  return sqrtf((i.x - j.x) * (i.x - j.x) + (i.y - j.y) * (i.y - j.y) + (i.z - j.z) * (i.z - j.z));
+}
+
 __global__ void msd_initialize_kernel( float4 *dataPtr, float3 offset, uint3 dims )
 {
 	// Index in position array
@@ -81,36 +87,64 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
 	const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 	
 	if( idx<prod(dims) ){
+	  const uint3 co = idx_to_co( idx, dims );
+	  // We assume border  particles are stuck
+		if (co.x == 0 || co.y == 0 || co.z == 0 || co.x == dims.x-1 || co.y == dims.y-1 || co.z == dims.z-1 ) {
+		  _new_pos = _cur_pos;
+		} else {
 
-		// Time step size
-		const float dt = 0.1f;
+		  // Time step size
+		  const float dt = 0.1f;
 
-		// 3D coordinate of current particle. 
-		// Can be offset to access neighbors. E.g.: upIdx = co_to_idx(co-make_uint3(0,1,0), dims). <-- Be sure to take speciel care for border cases!
-		const uint3 co = idx_to_co( idx, dims );
+		  // Spring stiffness, k
+		  const float k = 0.01f;
+		  // Initial length of spring, l
+		  const float l = 1.0f;
 
-		// Get the two previous positions
-		const float3 old_pos = crop_last_dim(_old_pos[idx]);
-		const float3 cur_pos = crop_last_dim(_cur_pos[idx]);
+		  // 3D coordinate of current particle. 
+		  // Can be offset to access neighbors. E.g.: upIdx = co_to_idx(co-make_uint3(0,1,0), dims). <-- Be sure to take speciel care for border cases!
+		  
+		  const unsigned int upIdx = co_to_idx( co - make_uint3(0,1,0), dims);
+		  const unsigned int downIdx = co_to_idx(co + make_uint3(0,1,0), dims);
+		  const unsigned int leftIdx = co_to_idx(co + make_uint3(1,0,0), dims);
+		  const unsigned int rightIdx = co_to_idx(co - make_uint3(1,0,0), dims);
+		  const unsigned int backIdx = co_to_idx(co + make_uint3(0,0,1), dims);
+		  const unsigned int forthIdx = co_to_idx(co - make_uint3(0,0,1), dims);
 
-		// Accelerate (constant gravity)
-		const float _a = -0.001f;
-		const float3 a = make_float3( 0.0f, _a, 0.0f );
+		  // Get the two previous positions
+		  const float3 old_pos = crop_last_dim(_old_pos[idx]);
+		  const float3 cur_pos = crop_last_dim(_cur_pos[idx]);
 
-		// Integrate acceleration (forward Euler) to find velocity
-		const float3 cur_v = (cur_pos-old_pos)/dt;
-		const float3 new_v = cur_v + dt*a; // v'=a
+		  // Calculate force for each of the particles length 1 away. That is for the 6 nearest neighbors.
+		  // fx is force on the x axis, that is the force of the particle to the right plus the force of the particle to the left
 
-		// Integrate velocity (forward Euler) to find new particle position
-		float3 new_pos = cur_pos + dt*new_v; // pos'=v
+		  float3 fnew = (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[rightIdx])))/ norm(cur_pos, crop_last_dim(_cur_pos[rightIdx]))) * (cur_pos - crop_last_dim(_cur_pos[rightIdx]) ) + 
+		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[leftIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[leftIdx])) ) * (cur_pos - crop_last_dim(_cur_pos[leftIdx])) + 
+		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[upIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[upIdx]))) * (cur_pos - crop_last_dim(_cur_pos[upIdx]) ) + 
+		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[downIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[downIdx]))) * (cur_pos - crop_last_dim(_cur_pos[downIdx]) ) + 
+		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[forthIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[forthIdx]))) * (cur_pos - crop_last_dim(_cur_pos[forthIdx]) ) + 
+		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[backIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[backIdx])) ) * (cur_pos - crop_last_dim(_cur_pos[backIdx]) ) ;
 
-		// Implement a "floor"
-		if( new_pos.y<0 )
-			new_pos.y = 0.0f;
+		  // Accelerate (constant gravity)
+		  const float _a = -0.001f;
+		  const float3 a = make_float3( fnew.x, fnew.y + _a, fnew.z );
 
-		// Output
-		_new_pos[idx] = make_float4( new_pos.x, new_pos.y, new_pos.z, 1.0f );
+		  // Integrate acceleration (forward Euler) to find velocity
+		  const float3 cur_v = (cur_pos-old_pos)/dt;
+		  const float3 new_v = cur_v + dt*a; // v'=a
+
+		  // Integrate velocity (forward Euler) to find new particle position
+		  float3 new_pos = cur_pos + dt*new_v; // pos'=v
+
+		  // Implement a "box"
+		  if( new_pos.y <_cur_pos[0].y)
+		    new_pos.y = _cur_pos[0].y;
+
+		  // Output
+		  _new_pos[idx] = make_float4( new_pos.x, new_pos.y, new_pos.z, 1.0f );
+		}
 	}
 }
+
 
 #endif // #ifndef _SIMPLEGL_KERNEL_H_
