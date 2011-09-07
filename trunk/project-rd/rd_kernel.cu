@@ -64,6 +64,13 @@ void rd_kernel(unsigned int width, unsigned int height,
 	//
 	// REACTION-DIFFUSION KERNEL - Kim Bjerge's version
 	//
+	// Notes: - optimization - kernel without "if"
+	// Kernel with shared memory how ?
+	// Texture version for Mac
+	// Meassurments - time
+	// Ressourcer forbrug?
+	// Tile assymetrisk ?
+
         // Use registeres to save current values of U and V
         float Ui = U[idx];
         float Vi = V[idx];
@@ -138,9 +145,9 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	const float F = 0.012f; 
 	const float k = 0.052f;
         */
-	const float dt = 1.0f;
+	const float dt = 0.2f;
 	const float dx = 2.0f;
-	const float Du = 0.00001f*((width*height)/100.0f);
+	const float Du = 0.0004f*((width*height)/100.0f);
 	const float Dv = 0.0002f*((width*height)/100.0f);
 	const float F = 0.012f; 
 	const float k = 0.052f;
@@ -156,5 +163,5 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	}
 
 	// For visualization we use a 'float1' image. You can use either 'U' or 'V'.
-	cudaMemcpy( result_devPtr, U, width*height*sizeof(float), cudaMemcpyDeviceToDevice );
+	cudaMemcpy( result_devPtr, V, width*height*sizeof(float), cudaMemcpyDeviceToDevice );
 }
