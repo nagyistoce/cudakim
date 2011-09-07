@@ -1,6 +1,10 @@
 #include "rd_kernel.h"
 
 #include <stdio.h>
+#include <timer.h>
+
+// CUDA timer definition
+unsigned int timerCUDA = 0;
 
 /*
  * Utility function to initialize U and V
@@ -97,6 +101,43 @@ void rd_kernel(unsigned int width, unsigned int height,
 }
 
 /*
+ * Kernel for the reaction-diffusion model
+ * This kernel is responsible for updating 'U' and 'V'
+ */
+__global__
+void rd_kernel_opt1(unsigned int width, unsigned int height,
+               float dt, float dx, float Du, float Dv,
+               float F, float k, float *U, float *V) {
+
+	// Coordinate of the current pixel (for this thread)
+	const uint2 co = make_uint2( blockIdx.x*blockDim.x + threadIdx.x,
+                                 blockIdx.y*blockDim.y + threadIdx.y );
+
+	// Linear index of the curernt pixel
+	const unsigned int idx = co.y*width + co.x;
+
+	//
+	// REACTION-DIFFUSION KERNEL - Optimized version 1
+	//
+
+	// Use registeres to save current values of U and V
+	float Ui = U[idx];
+	float Vi = V[idx];
+
+	// Computes the Laplacian operator for U and V - used values in x and y dimensions
+	float laplacianU = (U[idx+1] + U[idx-1] + U[idx+width] + U[idx-width] - 4 * Ui)/(dx*dx);
+	float laplacianV = (V[idx+1] + V[idx-1] + V[idx+width] + V[idx-width] - 4 * Vi)/(dx*dx);
+
+
+	// Computes the diffusion and reaction of the two chemicals reactants mixed together
+	float Uf = Du * laplacianU - Ui*pow(Vi,2) + F*(1 - Ui);
+	float Vf = Dv * laplacianV + Ui*pow(Vi,2) - (F + k)*Vi;
+
+	U[idx] = Ui + dt*Uf;
+	V[idx] = Vi + dt*Vf;
+}
+
+/*
  * Wrapper for the reaction-diffusion kernel. 
  * Called every frame by 'display'
  * 'result_devPtr' is a floating buffer used for visualization.
@@ -122,6 +163,8 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 
 		// Initialize U and V on the CPU and upload to the GPU
 		initializeConcentrations( width, height, U, V );
+
+		CreateTimer(&timerCUDA);
 
 		// Make sure we never get in here again...
 		first_pass = false;
@@ -153,7 +196,12 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	const float k = 0.052f;
 
 	// Invoke kernel (update U and V)
-	rd_kernel<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
+	RestartTimer(timerCUDA);
+	//rd_kernel<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
+	rd_kernel_opt1<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
+	StopTimer(timerCUDA);
+	printf("%f ms\r", GetTimer(timerCUDA));
+
 
 	// Check for errors
 	cudaError_t err = cudaGetLastError();
