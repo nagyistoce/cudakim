@@ -52,7 +52,6 @@
 
     Host code
 */
-
 #ifdef _WIN32
 #  define WINDOWS_LEAN_AND_MEAN
 #  define NOMINMAX
@@ -81,12 +80,12 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 // constants
-const unsigned int window_width = 512;
-const unsigned int window_height = 512;
+const unsigned int window_width = 1024;
+const unsigned int window_height = 1024;
 
-const unsigned int mesh_width = 20;
-const unsigned int mesh_height = 20;
-const unsigned int mesh_depth = 20;
+const unsigned int mesh_width = 5;
+const unsigned int mesh_height = 5;
+const unsigned int mesh_depth = 5;
 
 // vbo variables (two input, one output)
 GLuint old_vbo, cur_vbo, new_vbo;
