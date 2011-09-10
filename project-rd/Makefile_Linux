@@ -44,7 +44,7 @@ else
     endif
 endif
 
-
+NVCCFLAGS += --ptxas-options="-v"
 INCLUDES += -I$(CUDA_SDK)/common/inc
 LIBS += -L$(CUDA_SDK)/lib -lcutil_$(LIB_ARCH)
 

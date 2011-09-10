@@ -6,6 +6,11 @@
 // CUDA timer definition
 unsigned int timerCUDA = 0;
 
+// global scope
+// declare texture reference for 1D float texture
+texture<float, 1> texU;
+texture<float, 1> texV;
+
 /*
  * Utility function to initialize U and V
 */
@@ -68,12 +73,13 @@ void rd_kernel(unsigned int width, unsigned int height,
 	//
 	// REACTION-DIFFUSION KERNEL - Kim Bjerge's version
 	//
-	// Notes: - optimization - kernel without "if"
-	// Kernel with shared memory how ?
-	// Texture version for Mac
-	// Meassurments - time
-	// Ressourcer forbrug?
+	// done - Notes: - optimization - kernel without "if"
+	// done - Texture version for Mac
+	// done - Meassurments - time
+	// done - Ressourcer forbrug?
+
 	// Tile assymetrisk ?
+	// Kernel with shared memory how ?
 
         // Use registeres to save current values of U and V
         float Ui = U[idx];
@@ -90,14 +96,58 @@ void rd_kernel(unsigned int width, unsigned int height,
 
 
 		// Computes the diffusion and reaction of the two chemicals reactants mixed together
-		float Uf = Du * laplacianU - Ui*pow(Vi,2) + F*(1 - Ui);
+		float Uf = Du * laplacianU - Ui*powf(Vi,2) + F*(1 - Ui);
 		//float Uf = Du * laplacianU; // Difusion only
-		float Vf = Dv * laplacianV + Ui*pow(Vi,2) - (F + k)*Vi;
+		float Vf = Dv * laplacianV + Ui*powf(Vi,2) - (F + k)*Vi;
 
 		U[idx] = Ui + dt*Uf;
 		V[idx] = Vi + dt*Vf;
         }
         
+}
+
+/*
+ * Optimized kernel for the reaction-diffusion model
+ * Using texture memory for U and V
+ * This kernel is responsible for updating 'U' and 'V'
+ */
+__global__
+void rd_kernel_tex(unsigned int width, unsigned int height,
+               float dt, float dx, float Du, float Dv,
+               float F, float k, float *U, float *V) {
+
+	// Coordinate of the current pixel (for this thread)
+	const uint2 co = make_uint2( blockIdx.x*blockDim.x + threadIdx.x,
+                                 blockIdx.y*blockDim.y + threadIdx.y );
+
+	// Linear index of the curernt pixel
+	const unsigned int idx = co.y*width + co.x;
+
+	//
+	// REACTION-DIFFUSION KERNEL - Kim Bjerge's version
+	//
+
+	// Use registeres to save current values of U and V
+
+    float Ui = tex1Dfetch(texU, idx);
+	float Vi = tex1Dfetch(texV, idx);
+
+	// Skip computing first and last line in image
+	if (idx >= width && idx < width*(height-1))
+	{
+		// Computes the Laplacian operator for U and V - used values in x and y dimensions
+		float laplacianU = (tex1Dfetch(texU, idx+1) + tex1Dfetch(texU,idx-1) + tex1Dfetch(texU, idx+width) + tex1Dfetch(texU, idx-width) - 4 * Ui)/(dx*dx);
+		float laplacianV = (tex1Dfetch(texV, idx+1) + tex1Dfetch(texV, idx-1) + tex1Dfetch(texV, idx+width) + tex1Dfetch(texV, idx-width) - 4 * Vi)/(dx*dx);
+
+
+		// Computes the diffusion and reaction of the two chemicals reactants mixed together
+		float Uf = Du * laplacianU - Ui*powf(Vi,2) + F*(1 - Ui);
+		float Vf = Dv * laplacianV + Ui*powf(Vi,2) - (F + k)*Vi;
+
+		U[idx] = Ui + dt*Uf;
+		V[idx] = Vi + dt*Vf;
+	}
+
 }
 
 /*
@@ -130,12 +180,13 @@ void rd_kernel_opt1(unsigned int width, unsigned int height,
 
 
 	// Computes the diffusion and reaction of the two chemicals reactants mixed together
-	float Uf = Du * laplacianU - Ui*pow(Vi,2) + F*(1 - Ui);
-	float Vf = Dv * laplacianV + Ui*pow(Vi,2) - (F + k)*Vi;
+	float Uf = Du * laplacianU - Ui*powf(Vi,2) + F*(1 - Ui);
+	float Vf = Dv * laplacianV + Ui*powf(Vi,2) - (F + k)*Vi;
 
 	U[idx] = Ui + dt*Uf;
 	V[idx] = Vi + dt*Vf;
 }
+
 
 /*
  * Wrapper for the reaction-diffusion kernel. 
@@ -196,12 +247,37 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	const float k = 0.052f;
 
 	// Invoke kernel (update U and V)
+#if 1 // Optimized skipping top and bottom edges
 	RestartTimer(timerCUDA);
 	//rd_kernel<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
 	rd_kernel_opt1<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
 	StopTimer(timerCUDA);
-	printf("%f ms\r", GetTimer(timerCUDA));
+	float average = GetAverage(timerCUDA);
+	if (average > 0)
+	   printf("Opt1 %f ms\n", average);
+#endif
 
+#if 0 // Optimized with texture memory
+    // Create texture for U matrix
+    const cudaChannelFormatDesc descU = cudaCreateChannelDesc<float>();
+    size_t numU_bytes = width*height*sizeof(float);
+    cudaBindTexture(NULL, &texU, (const void*)U, &descU, numU_bytes);
+
+    // Create texture for V matrix
+    const cudaChannelFormatDesc descV = cudaCreateChannelDesc<float>();
+    size_t numV_bytes = width*height*sizeof(float);
+    cudaBindTexture(NULL, &texV, (const void*)V, &descV, numV_bytes);
+
+    RestartTimer(timerCUDA);
+	rd_kernel_tex<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V);
+	StopTimer(timerCUDA);
+	float average = GetAverage(timerCUDA);
+	if (average > 0)
+		printf("Tex %f ms\n", average);
+
+    cudaUnbindTexture(texU);
+    cudaUnbindTexture(texV);
+#endif
 
 	// Check for errors
 	cudaError_t err = cudaGetLastError();
