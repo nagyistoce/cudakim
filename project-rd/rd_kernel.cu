@@ -187,6 +187,28 @@ void rd_kernel_opt1(unsigned int width, unsigned int height,
 	V[idx] = Vi + dt*Vf;
 }
 
+/*
+ * Kernel for the reaction-diffusion model
+ * This kernel is responsible for updating 'U' and 'V'
+ */
+__global__
+void rd_kernel_opt2(unsigned int width, unsigned int height,
+               float dt, float dx, float Du, float Dv,
+               float F, float k, float *U, float *V) {
+
+	// Coordinate of the current pixel (for this thread)
+	const uint2 co = make_uint2( blockIdx.x*blockDim.x + threadIdx.x,
+                                 blockIdx.y*blockDim.y + threadIdx.y );
+
+	// Linear index of the curernt pixel
+	const unsigned int idx = co.y*width + co.x;
+
+	// REACTION-DIFFUSION KERNEL - Optimized version 2
+	// Use registeres to save current values of U and V
+
+	U[idx] = U[idx] + dt*(Du * ((U[idx+1] + U[idx-1] + U[idx+width] + U[idx-width] - 4 * U[idx])/(dx*dx)) - U[idx]*powf(V[idx],2) + F*(1 - U[idx]));
+	V[idx] = V[idx] + dt*(Dv * ((V[idx+1] + V[idx-1] + V[idx+width] + V[idx-width] - 4 * V[idx])/(dx*dx)) + U[idx]*powf(V[idx],2) - (F + k)*V[idx]);
+}
 
 /*
  * Wrapper for the reaction-diffusion kernel. 
@@ -250,11 +272,11 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 #if 1 // Optimized skipping top and bottom edges
 	RestartTimer(timerCUDA);
 	//rd_kernel<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
-	rd_kernel_opt1<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
+	rd_kernel_opt2<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
 	StopTimer(timerCUDA);
 	float average = GetAverage(timerCUDA);
 	if (average > 0)
-	   printf("Opt1 %f ms\n", average);
+	   printf("Opt2 %f ms\n", average);
 #endif
 
 #if 0 // Optimized with texture memory
