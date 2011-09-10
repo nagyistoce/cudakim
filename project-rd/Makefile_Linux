@@ -51,13 +51,13 @@ LIBS += -L$(CUDA_SDK)/lib -lcutil_$(LIB_ARCH)
 BINARY=main
 
 $(BINARY): $(BINARY).o rd_kernel.o
-	$(LINK) $(CXX_ARCH_FLAGS) $(LIBS) $(GL_LIBS) $^ -o $(BINARY)
+	$(LINK) $(CXX_ARCH_FLAGS) $^ -o $(BINARY) $(LIBS) $(GL_LIBS)
+
+main.o: main.cpp
+	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
 
 rd_kernel.o: rd_kernel.cu
 	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
-
-$(BINARY).o: $(BINARY).cpp
-	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
 
 clean:
 	rm -f *.o
