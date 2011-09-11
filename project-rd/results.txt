@@ -84,6 +84,7 @@ Opt1 13.257098 ms
 Opt1 13.047551 ms
 Opt1 13.141558 ms
 
+- Code written as one line enabling the compiler to optimize
 Opt2 15.379459 ms
 Opt2 15.181201 ms
 Opt2 15.351974 ms
@@ -94,5 +95,17 @@ Opt2 12.788561 ms
 Opt2 12.840851 ms
 Opt2 12.966012 ms
 Opt2 12.970753 ms
+
+- NVCCFLAGS -maxrregcount=8 - ensuring 3 blocks per SM - 256 threads per block full utilization 
+Opt1 23.517883 ms
+Opt1 22.703093 ms
+Opt1 22.760242 ms
+Opt1 22.740976 ms
+Opt1 22.734211 ms
+Opt1 22.796360 ms
+Opt1 22.817991 ms
+Opt1 22.723621 ms
+Opt1 22.720461 ms
+Opt1 22.845100 ms
 
 

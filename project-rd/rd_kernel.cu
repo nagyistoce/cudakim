@@ -183,6 +183,9 @@ void rd_kernel_opt1(unsigned int width, unsigned int height,
 	float Uf = Du * laplacianU - Ui*powf(Vi,2) + F*(1 - Ui);
 	float Vf = Dv * laplacianV + Ui*powf(Vi,2) - (F + k)*Vi;
 
+	// Needed since U and V values used by all threads in block
+	__syncthreads();
+
 	U[idx] = Ui + dt*Uf;
 	V[idx] = Vi + dt*Vf;
 }
@@ -206,8 +209,8 @@ void rd_kernel_opt2(unsigned int width, unsigned int height,
 	// REACTION-DIFFUSION KERNEL - Optimized version 2
 	// Use registeres to save current values of U and V
 
-	U[idx] = U[idx] + dt*(Du * ((U[idx+1] + U[idx-1] + U[idx+width] + U[idx-width] - 4 * U[idx])/(dx*dx)) - U[idx]*powf(V[idx],2) + F*(1 - U[idx]));
-	V[idx] = V[idx] + dt*(Dv * ((V[idx+1] + V[idx-1] + V[idx+width] + V[idx-width] - 4 * V[idx])/(dx*dx)) + U[idx]*powf(V[idx],2) - (F + k)*V[idx]);
+	U[idx] = U[idx] + dt*(Du * ((U[idx+1] + U[idx-1] + U[idx+width] + U[idx-width] - 4 * U[idx])/(dx*dx)) - U[idx]*V[idx]*V[idx] + F*(1 - U[idx]));
+	V[idx] = V[idx] + dt*(Dv * ((V[idx+1] + V[idx-1] + V[idx+width] + V[idx-width] - 4 * V[idx])/(dx*dx)) + U[idx]*V[idx]*V[idx] - (F + k)*V[idx]);
 }
 
 /*
@@ -261,10 +264,11 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	const float F = 0.012f; 
 	const float k = 0.052f;
         */
+
 	const float dt = 0.2f;
 	const float dx = 2.0f;
 	const float Du = 0.0004f*((width*height)/100.0f);
-	const float Dv = 0.0002f*((width*height)/100.0f);
+	const float Dv = 0.0002f*((width*height)/100.0f); // Impact on how fast V diffusses (0.0001 or 0.0002)
 	const float F = 0.012f; 
 	const float k = 0.052f;
 
@@ -272,6 +276,7 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 #if 1 // Optimized skipping top and bottom edges
 	RestartTimer(timerCUDA);
 	//rd_kernel<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
+	//rd_kernel_opt1<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
 	rd_kernel_opt2<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
 	StopTimer(timerCUDA);
 	float average = GetAverage(timerCUDA);
