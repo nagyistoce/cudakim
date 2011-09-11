@@ -272,6 +272,7 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	const float F = 0.012f; 
 	const float k = 0.052f;
 
+
 	// Invoke kernel (update U and V)
 #if 1 // Optimized skipping top and bottom edges
 	RestartTimer(timerCUDA);
