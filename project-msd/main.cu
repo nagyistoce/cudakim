@@ -83,9 +83,9 @@
 const unsigned int window_width = 1024;
 const unsigned int window_height = 1024;
 
-const unsigned int mesh_width = 10;
-const unsigned int mesh_height = 10;
-const unsigned int mesh_depth = 10;
+const unsigned int mesh_width = 20;
+const unsigned int mesh_height = 20;
+const unsigned int mesh_depth = 20;
 
 // vbo variables (two input, one output)
 GLuint old_vbo, cur_vbo, new_vbo;

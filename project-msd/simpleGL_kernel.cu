@@ -71,15 +71,18 @@ __global__ void msd_initialize_kernel( float4 *dataPtr, float3 offset, uint3 dim
 	}
 }
 
-#define K 0.008f // Spring stiffness
-#define L 0.3f // Rest length (shouldnt be a global constant)
+//#define K 0.008f // Spring stiffness
+//#define L 0.3f // Rest length (shouldnt be a global constant)
+
+#define K 0.02f // Spring stiffness
+#define L 0.001f // Rest length (shouldnt be a global constant)
 
 __device__ float3 spring_force_rest_1(const float3 Xi, const float3 Xj){
   // Optimisation opportunity: Reuse parameters for data, ie. Xi for Xij and Xj.x for normXij
   float3 Xij = Xi - Xj;
   float normXij = sqrtf((Xij.x * Xij.x) +(Xij.y * Xij.y) + (Xij.z * Xij.z));
 
-  return ((K * (L - normXij)) * (Xij))/normXij;
+  return ((L - normXij) * K) * (Xij / normXij);
 }
 
 #define SQRT_2 sqrtf(2) // Replace with constant
@@ -130,17 +133,21 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
           (co.x == dims.x-1 && co.y == dims.y-1) || (co.x == dims.x-1 && co.z == dims.z-1) || (co.y == dims.y-1 && co.z == dims.z-1) ) {
         _new_pos[idx] = _cur_pos[idx];
       } else {
+
 		// Time step size
-		const float dt = 0.1f;
+  		//const float dt = 0.1f;
+		const float dt = 1.0f;
 
 		// Get the two previous positions
 		const float3 old_pos = crop_last_dim(_old_pos[idx]);
 		const float3 cur_pos = crop_last_dim(_cur_pos[idx]);
 
 		// Accelerate (constant gravity)
-		const float _a = -0.0008f;
+		//const float _a = -0.0008f;
+		const float _a = -0.0002f;
 		float3 a = make_float3( 0.0f, _a, 0.0f );
         
+#if 1
         // Sqrt(1) neighbors: There are 6 of these
         if (co.x > 0)
           a += spring_force_rest_1(cur_pos, ValueAtOffset(-1,0,0));
@@ -154,9 +161,10 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
           a += spring_force_rest_1(cur_pos, ValueAtOffset(0,0,-1));
         if (co.z < dims.z-1)
           a += spring_force_rest_1(cur_pos, ValueAtOffset(0,0,1));
+#endif
 
+#if 0
         // Sqrt(2) neighbors: There are 12 of these
-        /*
         if (co.x > 0 && co.y > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,-1,0));
         if (co.x > 0 && co.y < dims.y)
@@ -183,8 +191,9 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1,-1));
         if (co.y < dims.y && co.z < dims.z)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1, 1));
-        */
-        /*
+#endif
+
+#if 0
         // Sqrt(3) neighbors: There are 8 of these
         if (1 == 2){
           a += spring_force_rest_3(cur_pos, ValueAtOffset(-1,-1,-1));
@@ -199,26 +208,27 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
 
           a += spring_force_rest_3(cur_pos, ValueAtOffset(-1, 1,-1));
         }
-        */
+#endif
 
-        // Dont run
-        if (1 != 1){
+#if 0
           // Integrate acceleration (forward Euler) to find velocity
           const float3 cur_v = (cur_pos-old_pos)/dt;
           const float3 new_v = cur_v + dt*a; // v'=a
           
           // Integrate velocity (forward Euler) to find new particle position
           float3 new_pos = cur_pos + dt*(new_v); // pos'=v
-        }
+#endif
 
-        if (1 != 1){
+#if 0
           // Verlet integration
           float3 new_pos = 2 * cur_pos - old_pos + a * dt * dt;
-        }
+#endif
 
+#if 1
         // Verlet integration with dampening
         #define DAMP 1.2f
         float3 new_pos = (2 - DAMP) * cur_pos - (1 - DAMP) * old_pos + a * dt * dt;
+#endif
 
 		// Implement a "floor"
 		if( new_pos.y<0 )
