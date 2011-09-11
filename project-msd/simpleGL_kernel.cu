@@ -51,34 +51,6 @@
 #include <cuda/float_util.hcu>
 #include <cuda/float_util_device.hcu>
 
-
-//Calculte the Euclidian distance in a 3D space
-/* Old version
-__device__ float norm(float3 i, float3 j) {
-  return sqrtf((i.x - j.x) * (i.x - j.x) + (i.y - j.y) * (i.y - j.y) + (i.z - j.z) * (i.z - j.z));
-}
-*/
-
-//Calculte the Euclidian distance in a 3D space
-__device__ inline float norm(float3 i, float3 j)
-{
-	return sqrtf(powf((i.x - j.x),2) + powf((i.y - j.y),2) + powf((i.z - j.z),2));
-}
-
-__device__ float3 springForce(const float3 Xi, const float3 Xj)
-{
-	// Spring stiffness, k
-	//const float k = 0.005f;
-	const float k = 0.008f;
-	// Initial length of spring, l
-	//const float l = 1.0f;
-	const float l = 0.05f;
-
-	float normXij = norm(Xi, Xj);
-
-	return ( k * (l - normXij) / normXij ) * (Xi - Xj);;
-}
-
 __global__ void msd_initialize_kernel( float4 *dataPtr, float3 offset, uint3 dims )
 {
 	// Index in position array
@@ -99,6 +71,44 @@ __global__ void msd_initialize_kernel( float4 *dataPtr, float3 offset, uint3 dim
 	}
 }
 
+#define K 0.008f // Spring stiffness
+#define L 0.3f // Rest length (shouldnt be a global constant)
+
+__device__ float3 spring_force_rest_1(const float3 Xi, const float3 Xj){
+  // Optimisation opportunity: Reuse parameters for data, ie. Xi for Xij and Xj.x for normXij
+  float3 Xij = Xi - Xj;
+  float normXij = sqrtf((Xij.x * Xij.x) +(Xij.y * Xij.y) + (Xij.z * Xij.z));
+
+  return ((K * (L - normXij)) * (Xij))/normXij;
+}
+
+#define SQRT_2 sqrtf(2) // Replace with constant
+__device__ float3 spring_force_rest_2(const float3 Xi, const float3 Xj){
+  // Optimisation opportunity: Reuse parameters for data, ie. Xi for Xij and Xj.x for normXij
+  float3 Xij = Xi - Xj;
+  float normXij = sqrtf((Xij.x * Xij.x) +(Xij.y * Xij.y) + (Xij.z * Xij.z));
+
+  return ((SQRT_2 - normXij) * K) * (Xij / normXij);
+}
+
+#define SQRT_3 sqrtf(3) // Replace with constant
+__device__ float3 spring_force_rest_3(const float3 Xi, const float3 Xj){
+  // Optimisation opportunity: Reuse parameters for data, ie. Xi for Xij and Xj.x for normXij
+  float3 Xij = Xj - Xi;
+  float normXij = sqrtf((Xij.x * Xij.x) +(Xij.y * Xij.y) + (Xij.z * Xij.z));
+
+  return ((SQRT_3 - normXij) * K) * (Xij / normXij);
+}
+
+__device__ inline uint3 co_move(uint3 foo, int x, int y, int z){
+  foo.x += x;
+  foo.y += y;
+  foo.z += z;
+  return foo;
+}
+
+#define ValueAtOffset(x,y,z) (crop_last_dim(_cur_pos[co_to_idx(co_move(co, x, y, z), dims)]))
+
 ///////////////////////////////////////////////////////////////////////////////
 //! Simple kernel to implement numerical integration. EXTEND WITH MSD SYSTEM.
 //! @param pos  vertex positiond in global memory
@@ -108,115 +118,116 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
 	// Index in position array
 	const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 	
-	if( idx<prod(dims) ) {
+	if ( idx<prod(dims) ){
+      
+      // 3D coordinate of current particle. 
+      // Can be offset to access neighbors. E.g.: upIdx = co_to_idx(co-make_uint3(0,1,0), dims). <-- Be sure to take speciel care for border cases!
+      const uint3 co = idx_to_co( idx, dims );
+      
+      if ((co.x == 0 && co.y == 0) || (co.x == 0 && co.z == 0) || (co.y == 0 && co.z == 0) ||
+          (co.x == 0 && co.y == dims.y-1) || (co.x == 0 && co.z == dims.z-1) || (co.y == 0 && co.z == dims.z-1) ||
+          (co.x == dims.x-1 && co.y == 0) || (co.x == dims.x-1 && co.z == 0) || (co.y == dims.y-1 && co.z == 0) ||
+          (co.x == dims.x-1 && co.y == dims.y-1) || (co.x == dims.x-1 && co.z == dims.z-1) || (co.y == dims.y-1 && co.z == dims.z-1) ) {
+        _new_pos[idx] = _cur_pos[idx];
+      } else {
+		// Time step size
+		const float dt = 0.1f;
 
-		const uint3 co = idx_to_co( idx, dims );
+		// Get the two previous positions
+		const float3 old_pos = crop_last_dim(_old_pos[idx]);
+		const float3 cur_pos = crop_last_dim(_cur_pos[idx]);
 
-	  // We assume border  particles are stuck
-	  if ((co.x == 0 && co.y == 0) || (co.x == 0 && co.z == 0) || (co.y == 0 && co.z == 0) ||
-	      (co.x == 0 && co.y == dims.y-1) || (co.x == 0 && co.z == dims.z-1) || (co.y == 0 && co.z == dims.z-1) ||
-	      (co.x == dims.x-1 && co.y == 0) || (co.x == dims.x-1 && co.z == 0) || (co.y == dims.y-1 && co.z == 0) ||
-	      (co.x == dims.x-1 && co.y == dims.y-1) || (co.x == dims.x-1 && co.z == dims.z-1) || (co.y == dims.y-1 && co.z == dims.z-1) ) {
-		  _new_pos[idx] = _cur_pos[idx];
+		// Accelerate (constant gravity)
+		const float _a = -0.0008f;
+		float3 a = make_float3( 0.0f, _a, 0.0f );
+        
+        // Sqrt(1) neighbors: There are 6 of these
+        if (co.x > 0)
+          a += spring_force_rest_1(cur_pos, ValueAtOffset(-1,0,0));
+        if (co.x < dims.x-1)
+          a += spring_force_rest_1(cur_pos, ValueAtOffset(1,0,0));
+        if (co.y > 0)
+          a += spring_force_rest_1(cur_pos, ValueAtOffset(0,-1,0));
+        if (co.y < dims.y-1)
+          a += spring_force_rest_1(cur_pos, ValueAtOffset(0,1,0));
+        if (co.z > 0)
+          a += spring_force_rest_1(cur_pos, ValueAtOffset(0,0,-1));
+        if (co.z < dims.z-1)
+          a += spring_force_rest_1(cur_pos, ValueAtOffset(0,0,1));
 
-		} else {
+        // Sqrt(2) neighbors: There are 12 of these
+        /*
+        if (co.x > 0 && co.y > 0)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,-1,0));
+        if (co.x > 0 && co.y < dims.y)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(-1, 1,0));
+        if (co.x < dims.x && co.y > 0)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,-1,0));
+        if (co.x < dims.x && co.y < dims.y)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset( 1, 1,0));
 
-		  // Time step size
-		  const float dt = 0.1f;
+        if (co.x > 0 && co.z > 0)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,0,-1));
+        if (co.x > 0 && co.z < dims.z)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,0, 1));
+        if (co.x < dims.x && co.z > 0)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,0,-1));
+        if (co.x < dims.x && co.z < dims.z)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,0, 1));
 
-		  /* Old version
-		  // Spring stiffness, k
-		  const float k = 0.01f;
-		  // Initial length of spring, l
-		  const float l = 1.0f;
-		  */
+        if (co.y > 0 && co.z > 0)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(0,-1,-1));
+        if (co.y > 0 && co.z < dims.z)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(0,-1, 1));
+        if (co.y < dims.y && co.z > 0)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1,-1));
+        if (co.y < dims.y && co.z < dims.z)
+          a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1, 1));
+        */
+        /*
+        // Sqrt(3) neighbors: There are 8 of these
+        if (1 == 2){
+          a += spring_force_rest_3(cur_pos, ValueAtOffset(-1,-1,-1));
+          a += spring_force_rest_3(cur_pos, ValueAtOffset(-1,-1, 1));
+          a += spring_force_rest_3(cur_pos, ValueAtOffset(-1, 1, 1));
+          a += spring_force_rest_3(cur_pos, ValueAtOffset( 1, 1, 1));
 
-		  // 3D coordinate of current particle. 
-		  // Can be offset to access neighbors. E.g.: upIdx = co_to_idx(co-make_uint3(0,1,0), dims). <-- Be sure to take speciel care for border cases!
-		  
-		  //If we are on the border we take the force to ourselves, thus anialating the force to the particle that does not exist, during the calculation of accumulated force.
-		  unsigned int upIdx; 
-		  unsigned int downIdx;
-		  unsigned int leftIdx;
-		  unsigned int rightIdx;
-		  unsigned int backIdx;
-		  unsigned int forthIdx;
+          a += spring_force_rest_3(cur_pos, ValueAtOffset( 1,-1,-1));
+          a += spring_force_rest_3(cur_pos, ValueAtOffset( 1, 1,-1));
 
-		  if (co.x == 0) {
-		    rightIdx = idx;
-		  } else {
-		    rightIdx = co_to_idx( co - make_uint3(1,0,0), dims);
-		  }
-		  if (co.x == dims.x-1) {
-		    leftIdx = idx;
-		  } else {
-		    leftIdx = co_to_idx( co + make_uint3(1,0,0), dims);
-		  }
-		  if (co.y == 0) {
-		    upIdx = idx;
-		  } else {
-		    upIdx = co_to_idx( co - make_uint3(0,1,0), dims);
-		  }
-		  if (co.y == dims.y-1) {
-		    downIdx = idx;
-		  } else {
-		    downIdx = co_to_idx( co + make_uint3(0,1,0), dims);
-		  }
-		  if (co.z == 0) {
-		    backIdx = idx;
-		  } else {
-		    backIdx = co_to_idx( co - make_uint3(0,0,1), dims);
-		  }
-		  if (co.z == dims.z-1) {
-		    forthIdx = idx;
-		  } else {
-		    forthIdx = co_to_idx( co + make_uint3(0,0,1), dims);
-		  }
+          a += spring_force_rest_3(cur_pos, ValueAtOffset( 1,-1, 1));
 
-		  // Get the two previous positions
-		  const float3 old_pos = crop_last_dim(_old_pos[idx]);
-		  const float3 cur_pos = crop_last_dim(_cur_pos[idx]);
+          a += spring_force_rest_3(cur_pos, ValueAtOffset(-1, 1,-1));
+        }
+        */
 
-		  // Calculate force for each of the particles length 1 away. That is for the 6 nearest neighbors.
-		  // fx is force on the x axis, that is the force of the particle to the right plus the force of the particle to the left
+        // Dont run
+        if (1 != 1){
+          // Integrate acceleration (forward Euler) to find velocity
+          const float3 cur_v = (cur_pos-old_pos)/dt;
+          const float3 new_v = cur_v + dt*a; // v'=a
+          
+          // Integrate velocity (forward Euler) to find new particle position
+          float3 new_pos = cur_pos + dt*(new_v); // pos'=v
+        }
 
-		  float3 fnew = springForce(cur_pos, crop_last_dim(_cur_pos[upIdx]))
-				        + springForce(cur_pos, crop_last_dim(_cur_pos[leftIdx]))
-				        + springForce(cur_pos, crop_last_dim(_cur_pos[rightIdx]))
-				        //+ springForce(cur_pos, crop_last_dim(_cur_pos[backIdx])) // Doesn't work ?
-				        //+ springForce(cur_pos, crop_last_dim(_cur_pos[forthIdx])) // Doesn't work ?
-				        + springForce(cur_pos, crop_last_dim(_cur_pos[downIdx]));
+        if (1 != 1){
+          // Verlet integration
+          float3 new_pos = 2 * cur_pos - old_pos + a * dt * dt;
+        }
 
-		  /* Old version
-		  float3 fnew = (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[rightIdx])))/ norm(cur_pos, crop_last_dim(_cur_pos[rightIdx]))) * (cur_pos - crop_last_dim(_cur_pos[rightIdx]) ) +
-		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[leftIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[leftIdx])) ) * (cur_pos - crop_last_dim(_cur_pos[leftIdx])) +
-		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[upIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[upIdx]))) * (cur_pos - crop_last_dim(_cur_pos[upIdx]) ) + 
-		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[downIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[downIdx]))) * (cur_pos - crop_last_dim(_cur_pos[downIdx]) ) +
-		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[forthIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[forthIdx]))) * (cur_pos - crop_last_dim(_cur_pos[forthIdx]) ) + 
-		    (k * (l - norm(cur_pos, crop_last_dim(_cur_pos[backIdx]))) / norm(cur_pos, crop_last_dim(_cur_pos[backIdx])) ) * (cur_pos - crop_last_dim(_cur_pos[backIdx]) ) ;
-          */
+        // Verlet integration with dampening
+        #define DAMP 1.2f
+        float3 new_pos = (2 - DAMP) * cur_pos - (1 - DAMP) * old_pos + a * dt * dt;
 
-		  // Accelerate (constant gravity)
-		  const float _a = -0.0008f;
-		  const float3 a = make_float3( fnew.x, fnew.y + _a, fnew.z );
-		  //const float3 a = make_float3( 0, _a, 0 );
+		// Implement a "floor"
+		if( new_pos.y<0 )
+			new_pos.y = 0.0f;
 
-		  // Integrate acceleration (forward Euler) to find velocity
-		  const float3 cur_v = (cur_pos-old_pos)/dt;
-		  const float3 new_v = cur_v + dt*a; // v'=a
-
-		  // Integrate velocity (forward Euler) to find new particle position
-		  float3 new_pos = cur_pos + dt*new_v; // pos'=v
-
-		  // Implement a "floor"
-		  if( new_pos.y < 0.0f)
-		    new_pos.y =0.0f;
-
-		  // Output
-		  _new_pos[idx] = make_float4( new_pos.x, new_pos.y, new_pos.z, 1.0f );
-		}
+		// Output
+		_new_pos[idx] = make_float4( new_pos.x, new_pos.y, new_pos.z, 1.0f );
+      }
 	}
 }
-
 
 #endif // #ifndef _SIMPLEGL_KERNEL_H_
