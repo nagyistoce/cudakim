@@ -33,8 +33,8 @@
 
 #include <rd_kernel.h>
 
-//const unsigned int width = 256, height = 256;
-const unsigned int width = 1024, height = 1024;
+const unsigned int width = 512, height = 512;
+//const unsigned int width = 1024, height = 1024;
 unsigned int pbo_x=0, pbo_y=0;
 
 GLuint pbo;    /* OpenGL pixel buffer object (map between Cuda and OpenGL) */
