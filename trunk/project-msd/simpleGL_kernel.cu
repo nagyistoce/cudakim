@@ -72,7 +72,7 @@ __device__ float3 springForce(const float3 Xi, const float3 Xj)
 	const float k = 0.008f;
 	// Initial length of spring, l
 	//const float l = 1.0f;
-	const float l = 0.3f;
+	const float l = 0.05f;
 
 	float normXij = norm(Xi, Xj);
 
