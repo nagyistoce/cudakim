@@ -85,7 +85,7 @@ __device__ float3 spring_force_rest_1(const float3 Xi, const float3 Xj){
   return ((L - normXij) * K) * (Xij / normXij);
 }
 
-#define SQRT_2 sqrtf(2) // Replace with constant
+#define SQRT_2 sqrtf(2*L*L) // sqrt ((L)^2 +(L)^2) Replace with constant
 __device__ float3 spring_force_rest_2(const float3 Xi, const float3 Xj){
   // Optimisation opportunity: Reuse parameters for data, ie. Xi for Xij and Xj.x for normXij
   float3 Xij = Xi - Xj;
@@ -94,16 +94,16 @@ __device__ float3 spring_force_rest_2(const float3 Xi, const float3 Xj){
   return ((SQRT_2 - normXij) * K) * (Xij / normXij);
 }
 
-#define SQRT_3 sqrtf(3) // Replace with constant
+#define SQRT_3 sqrtf(3*L*L) // sqrt (L^2 +L^2+L^2) Replace with constant
 __device__ float3 spring_force_rest_3(const float3 Xi, const float3 Xj){
   // Optimisation opportunity: Reuse parameters for data, ie. Xi for Xij and Xj.x for normXij
-  float3 Xij = Xj - Xi;
+  float3 Xij = Xi - Xj;
   float normXij = sqrtf((Xij.x * Xij.x) +(Xij.y * Xij.y) + (Xij.z * Xij.z));
 
   return ((SQRT_3 - normXij) * K) * (Xij / normXij);
 }
 
-__device__ inline uint3 co_move(uint3 foo, int x, int y, int z){
+__device__ inline uint3 co_move(uint3 foo, const int x, const int y, const int z){
   foo.x += x;
   foo.y += y;
   foo.z += z;
@@ -116,7 +116,7 @@ __device__ inline uint3 co_move(uint3 foo, int x, int y, int z){
 //! Simple kernel to implement numerical integration. EXTEND WITH MSD SYSTEM.
 //! @param pos  vertex positiond in global memory
 ///////////////////////////////////////////////////////////////////////////////
-__global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos, uint3 dims )
+__global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float4 *_new_pos, const uint3 dims )
 {
 	// Index in position array
 	const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -126,17 +126,19 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
       // 3D coordinate of current particle. 
       // Can be offset to access neighbors. E.g.: upIdx = co_to_idx(co-make_uint3(0,1,0), dims). <-- Be sure to take speciel care for border cases!
       const uint3 co = idx_to_co( idx, dims );
-      
+
       if ((co.x == 0 && co.y == 0) || (co.x == 0 && co.z == 0) || (co.y == 0 && co.z == 0) ||
           (co.x == 0 && co.y == dims.y-1) || (co.x == 0 && co.z == dims.z-1) || (co.y == 0 && co.z == dims.z-1) ||
           (co.x == dims.x-1 && co.y == 0) || (co.x == dims.x-1 && co.z == 0) || (co.y == dims.y-1 && co.z == 0) ||
           (co.x == dims.x-1 && co.y == dims.y-1) || (co.x == dims.x-1 && co.z == dims.z-1) || (co.y == dims.y-1 && co.z == dims.z-1) ) {
         _new_pos[idx] = _cur_pos[idx];
-      } else {
+      }
+      	  else
+      {
 
 		// Time step size
   		//const float dt = 0.1f;
-		const float dt = 1.0f;
+        const float dt = 0.5f;
 
 		// Get the two previous positions
 		const float3 old_pos = crop_last_dim(_old_pos[idx]);
@@ -144,7 +146,7 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
 
 		// Accelerate (constant gravity)
 		//const float _a = -0.0008f;
-		const float _a = -0.0002f;
+		const float _a = -0.0018f;
 		float3 a = make_float3( 0.0f, _a, 0.0f );
         
 #if 1
@@ -163,51 +165,57 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
           a += spring_force_rest_1(cur_pos, ValueAtOffset(0,0,1));
 #endif
 
-#if 0
+#if 1
         // Sqrt(2) neighbors: There are 12 of these
         if (co.x > 0 && co.y > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,-1,0));
-        if (co.x > 0 && co.y < dims.y)
+        if (co.x > 0 && co.y < dims.y-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1, 1,0));
-        if (co.x < dims.x && co.y > 0)
+        if (co.x < dims.x-1 && co.y > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,-1,0));
-        if (co.x < dims.x && co.y < dims.y)
+        if (co.x < dims.x-1 && co.y < dims.y-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1, 1,0));
 
         if (co.x > 0 && co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,0,-1));
-        if (co.x > 0 && co.z < dims.z)
+        if (co.x > 0 && co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,0, 1));
-        if (co.x < dims.x && co.z > 0)
+        if (co.x < dims.x-1 && co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,0,-1));
-        if (co.x < dims.x && co.z < dims.z)
+        if (co.x < dims.x-1 && co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,0, 1));
 
         if (co.y > 0 && co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0,-1,-1));
-        if (co.y > 0 && co.z < dims.z)
+        if (co.y > 0 && co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0,-1, 1));
-        if (co.y < dims.y && co.z > 0)
+        if (co.y < dims.y-1 && co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1,-1));
-        if (co.y < dims.y && co.z < dims.z)
+        if (co.y < dims.y-1 && co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1, 1));
 #endif
 
-#if 0
-        // Sqrt(3) neighbors: There are 8 of these
-        if (1 == 2){
+#if 1
+        // Sqrt(3) neighbors: There are 8 of these.
+	if (co.x > 0 & co.y > 0 & co.z > 0)
           a += spring_force_rest_3(cur_pos, ValueAtOffset(-1,-1,-1));
+	if (co.x > 0 & co.y > 0 & co.z < dims.z-1)
           a += spring_force_rest_3(cur_pos, ValueAtOffset(-1,-1, 1));
+	if (co.x > 0 & co.y < dims.y-1 & co.z < dims.z-1)
           a += spring_force_rest_3(cur_pos, ValueAtOffset(-1, 1, 1));
+	if (co.x < dims.x-1 & co.y < dims.y-1 & co.z < dims.z-1)
           a += spring_force_rest_3(cur_pos, ValueAtOffset( 1, 1, 1));
 
+	if (co.x < dims.x-1 & co.y > 0 & co.z > 0)
           a += spring_force_rest_3(cur_pos, ValueAtOffset( 1,-1,-1));
+	if (co.x < dims.x-1 & co.y < dims.y-1 & co.z > 0)
           a += spring_force_rest_3(cur_pos, ValueAtOffset( 1, 1,-1));
 
+	if (co.x < dims.x-1 & co.y > 0 & co.z < dims.z-1)
           a += spring_force_rest_3(cur_pos, ValueAtOffset( 1,-1, 1));
 
+	if (co.x > 0 & co.y < dims.y-1 & co.z > 0)
           a += spring_force_rest_3(cur_pos, ValueAtOffset(-1, 1,-1));
-        }
 #endif
 
 #if 0
@@ -225,17 +233,16 @@ __global__ void msd_kernel( float4 *_old_pos, float4 *_cur_pos, float4 *_new_pos
 #endif
 
 #if 1
-        // Verlet integration with dampening
-        #define DAMP 1.2f
-        float3 new_pos = (2 - DAMP) * cur_pos - (1 - DAMP) * old_pos + a * dt * dt;
+          // Verlet integration with dampening
+          #define DAMP 1.2f
+          float3 new_pos = (2 - DAMP) * cur_pos - (1 - DAMP) * old_pos + a * dt * dt;
 #endif
 
-		// Implement a "floor"
-		if( new_pos.y<0 )
-			new_pos.y = 0.0f;
+          if (new_pos.y < 0.0f)
+        	  new_pos.y = 0.0f;
 
-		// Output
-		_new_pos[idx] = make_float4( new_pos.x, new_pos.y, new_pos.z, 1.0f );
+          // Output
+          _new_pos[idx] = make_float4( new_pos.x, new_pos.y, new_pos.z, 1.0f );
       }
 	}
 }
