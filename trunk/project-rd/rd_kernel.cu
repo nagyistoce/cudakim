@@ -81,13 +81,13 @@ void rd_kernel(unsigned int width, unsigned int height,
 	// Tile assymetrisk ?
 	// Kernel with shared memory how ?
 
-        // Use registeres to save current values of U and V
-        float Ui = U[idx];
-        float Vi = V[idx];
+	// Use registeres to save current values of U and V
+	float Ui = U[idx];
+	float Vi = V[idx];
 
-        // Skip computing first and last line in image
-        if (idx >= width && idx < width*(height-1))
-        {
+	// Skip computing first and last line in image
+	if (idx >= width && idx < width*(height-1))
+	{
 		// Computes the Laplacian operator for U and V - used values in x and y dimensions
 		//float laplacianU = Ui;
 		//float laplacianV = Vi;
@@ -102,7 +102,7 @@ void rd_kernel(unsigned int width, unsigned int height,
 
 		U[idx] = Ui + dt*Uf;
 		V[idx] = Vi + dt*Vf;
-        }
+	}
         
 }
 
@@ -149,10 +149,38 @@ void rd_kernel_tex(unsigned int width, unsigned int height,
 	}
 
 }
+/*
+ * Kernel for the reaction-diffusion model
+ * This kernel is responsible for updating 'U' and 'V'
+ */
+__global__
+void rd_kernel_linux_opt2(unsigned int width, unsigned int height,
+               float dt, float dx, float Du, float Dv,
+               float F, float k, float *U, float *V) {
+
+	// Coordinate of the current pixel (for this thread)
+	const uint2 co = make_uint2( blockIdx.x*blockDim.x + threadIdx.x,
+                                 blockIdx.y*blockDim.y + threadIdx.y );
+
+	// Linear index of the curernt pixel
+	const unsigned int idx = co.y*width + co.x;
+
+	// REACTION-DIFFUSION KERNEL - Optimized version 2
+	// Use registeres to save current values of U and V
+
+	// Skip computing first and last line in image
+	if (idx >= width && idx < width*(height-1))
+	{
+		U[idx] = U[idx] + dt*(Du * ((U[idx+1] + U[idx-1] + U[idx+width] + U[idx-width] - 4 * U[idx])/(dx*dx)) - U[idx]*V[idx]*V[idx] + F*(1 - U[idx]));
+		V[idx] = V[idx] + dt*(Dv * ((V[idx+1] + V[idx-1] + V[idx+width] + V[idx-width] - 4 * V[idx])/(dx*dx)) + U[idx]*V[idx]*V[idx] - (F + k)*V[idx]);
+	}
+}
+
 
 /*
  * Kernel for the reaction-diffusion model
  * This kernel is responsible for updating 'U' and 'V'
+ * Works only on Mini Mac ?
  */
 __global__
 void rd_kernel_opt1(unsigned int width, unsigned int height,
@@ -193,6 +221,7 @@ void rd_kernel_opt1(unsigned int width, unsigned int height,
 /*
  * Kernel for the reaction-diffusion model
  * This kernel is responsible for updating 'U' and 'V'
+ * Works only on Mini Mac
  */
 __global__
 void rd_kernel_opt2(unsigned int width, unsigned int height,
@@ -276,9 +305,14 @@ void rd(unsigned int width, unsigned int height, float *result_devPtr) {
 	// Invoke kernel (update U and V)
 #if 1 // Optimized skipping top and bottom edges
 	RestartTimer(timerCUDA);
+
 	//rd_kernel<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
+	rd_kernel_linux_opt2<<< dim3(width/blockDim.x, height/blockDim.y), blockDim >>>( width, height, dt, dx, Du, Dv, F, k, U, V );
+
+	// Only working on miniMac
 	//rd_kernel_opt1<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
-	rd_kernel_opt2<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
+	//rd_kernel_opt2<<< dim3(width/blockDim.x, (height-2)/blockDim.y), blockDim >>>( width, height-2, dt, dx, Du, Dv, F, k, &U[width], &V[width] );
+
 	StopTimer(timerCUDA);
 	float average = GetAverage(timerCUDA);
 	if (average > 0)
