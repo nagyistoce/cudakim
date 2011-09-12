@@ -25,12 +25,14 @@ void inline CreateTimer(unsigned int *timer)
 
 void inline StartTimer(unsigned int timer)
 {
+    //cudaThreadSynchronize();
     cutilSafeCall(cudaThreadSynchronize());
     cutilCheckError(cutStartTimer(timer));
 }
 
 void inline StopTimer(unsigned int timer)
 {
+    //cudaThreadSynchronize();
     cutilSafeCall(cudaThreadSynchronize());
     cutilCheckError(cutStopTimer(timer));
     if (idx < WINDOW)

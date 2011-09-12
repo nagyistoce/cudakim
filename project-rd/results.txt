@@ -108,4 +108,30 @@ Opt1 22.723621 ms
 Opt1 22.720461 ms
 Opt1 22.845100 ms
 
+Linux: GeForce GTX 480
+Opt1 0.312890 ms
+Opt1 0.312620 ms
+Opt1 0.312600 ms
+Opt1 0.315010 ms
+Opt1 0.320480 ms
+Opt1 0.323400 ms
+Opt1 0.323360 ms
+Opt1 0.325190 ms
+Opt1 0.326740 ms
+Opt1 0.328220 ms
+
+Linux: GeForce GTX 480
+Opt2 0.285840 ms
+Opt2 0.289710 ms
+Opt2 0.285250 ms
+Opt2 0.285270 ms
+Opt2 0.285110 ms
+Opt2 0.288120 ms
+Opt2 0.286920 ms
+Opt2 0.291560 ms
+Opt2 0.287450 ms
+Opt2 0.285320 ms
+
+
+
 
