@@ -95,6 +95,8 @@ int mouse_old_x, mouse_old_y;
 int mouse_buttons = 0;
 float rotate_x = 0.0, rotate_y = 0.0;
 float translate_z = -3.0;
+float user_a = -0.0018f;
+float user_dt = 0.5f;
 
 ////////////////////////////////////////////////////////////////////////////////
 // kernels
@@ -201,7 +203,7 @@ void runCuda()
 	const unsigned int block_dim_x = 256;
 	dim3 block(block_dim_x, 1, 1);
     dim3 grid(ceil((float)(mesh_width*mesh_height*mesh_depth)/(float)block_dim_x), 1, 1);
-    msd_kernel<<< grid, block>>>(_old_pos, _cur_pos, _new_pos, make_uint3(mesh_width, mesh_height, mesh_depth));
+    msd_kernel<<< grid, block>>>(_old_pos, _cur_pos, _new_pos, make_uint3(mesh_width, mesh_height, mesh_depth), user_a, user_dt);
 
     // unmap buffer object
     CUDA_SAFE_CALL(cudaGLUnmapBufferObject( new_vbo));
@@ -317,11 +319,28 @@ void display()
 void keyboard( unsigned char key, int /*x*/, int /*y*/)
 {
     switch( key) {
-    case( 27) :
-        deleteVBO( &old_vbo);
-        deleteVBO( &cur_vbo);
-        deleteVBO( &new_vbo);
-        exit( 0);
+
+		case( 27) :
+			deleteVBO( &old_vbo);
+			deleteVBO( &cur_vbo);
+			deleteVBO( &new_vbo);
+			exit( 0);
+		case 'A':
+			user_a -= 0.0001f;
+			printf("Gravity %f\n", user_a);
+			break;
+		case 'a':
+			user_a += 0.0001f;
+			printf("Gravity %f\n", user_a);
+			break;
+		case 'T':
+			user_dt += 0.01f;
+			printf("Time %f\n", user_dt);
+			break;
+		case 't':
+			user_dt -= 0.01f;
+			printf("Time %f\n", user_dt);
+			break;
     }
 }
 

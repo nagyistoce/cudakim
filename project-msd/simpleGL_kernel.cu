@@ -116,7 +116,7 @@ __device__ inline uint3 co_move(uint3 foo, const int x, const int y, const int z
 //! Simple kernel to implement numerical integration. EXTEND WITH MSD SYSTEM.
 //! @param pos  vertex positiond in global memory
 ///////////////////////////////////////////////////////////////////////////////
-__global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float4 *_new_pos, const uint3 dims )
+__global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float4 *_new_pos, const uint3 dims, float _a, float dt)
 {
 	// Index in position array
 	const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -138,7 +138,7 @@ __global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float
 
 		// Time step size
   		//const float dt = 0.1f;
-        const float dt = 0.5f;
+        //const float dt = 0.5f;
 
 		// Get the two previous positions
 		const float3 old_pos = crop_last_dim(_old_pos[idx]);
@@ -146,7 +146,7 @@ __global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float
 
 		// Accelerate (constant gravity)
 		//const float _a = -0.0008f;
-		const float _a = -0.0018f;
+		//const float _a = -0.0018f;
 		float3 a = make_float3( 0.0f, _a, 0.0f );
         
 #if 1
