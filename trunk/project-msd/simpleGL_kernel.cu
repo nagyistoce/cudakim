@@ -51,6 +51,7 @@
 #include <cuda/float_util.hcu>
 #include <cuda/float_util_device.hcu>
 
+
 __global__ void msd_initialize_kernel( float4 *dataPtr, float3 offset, uint3 dims )
 {
 	// Index in position array
@@ -111,6 +112,7 @@ __device__ inline uint3 co_move(uint3 foo, const int x, const int y, const int z
 }
 
 #define ValueAtOffset(x,y,z) (crop_last_dim(_cur_pos[co_to_idx(co_move(co, x, y, z), dims)]))
+//#define ValueAtOffset(x,y,z) (crop_last_dim(const_cur_pos[co_to_idx(co_move(co, x, y, z), dims)]))
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Simple kernel to implement numerical integration. EXTEND WITH MSD SYSTEM.
@@ -127,13 +129,15 @@ __global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float
       // Can be offset to access neighbors. E.g.: upIdx = co_to_idx(co-make_uint3(0,1,0), dims). <-- Be sure to take speciel care for border cases!
       const uint3 co = idx_to_co( idx, dims );
 
-      if ((co.x == 0 && co.y == 0) || (co.x == 0 && co.z == 0) || (co.y == 0 && co.z == 0) ||
-          (co.x == 0 && co.y == dims.y-1) || (co.x == 0 && co.z == dims.z-1) || (co.y == 0 && co.z == dims.z-1) ||
-          (co.x == dims.x-1 && co.y == 0) || (co.x == dims.x-1 && co.z == 0) || (co.y == dims.y-1 && co.z == 0) ||
-          (co.x == dims.x-1 && co.y == dims.y-1) || (co.x == dims.x-1 && co.z == dims.z-1) || (co.y == dims.y-1 && co.z == dims.z-1) ) {
+#if 1
+      if ((co.x == 0 & co.y == 0) | (co.x == 0 & co.z == 0) | (co.y == 0 & co.z == 0) |
+          (co.x == 0 & co.y == dims.y-1) | (co.x == 0 & co.z == dims.z-1) | (co.y == 0 & co.z == dims.z-1) |
+          (co.x == dims.x-1 & co.y == 0) | (co.x == dims.x-1 & co.z == 0) | (co.y == dims.y-1 & co.z == 0) |
+          (co.x == dims.x-1 & co.y == dims.y-1) | (co.x == dims.x-1 & co.z == dims.z-1) | (co.y == dims.y-1 & co.z == dims.z-1) ) {
         _new_pos[idx] = _cur_pos[idx];
       }
       	  else
+#endif
       {
 
 		// Time step size
@@ -143,11 +147,13 @@ __global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float
 		// Get the two previous positions
 		const float3 old_pos = crop_last_dim(_old_pos[idx]);
 		const float3 cur_pos = crop_last_dim(_cur_pos[idx]);
+		//const float3 old_pos = crop_last_dim(const_old_pos[idx]);
+		//const float3 cur_pos = crop_last_dim(const_cur_pos[idx]);
 
 		// Accelerate (constant gravity)
 		//const float _a = -0.0008f;
 		//const float _a = -0.0018f;
-		float3 a = make_float3( 0.0f, _a, 0.0f );
+		float3 a = make_float3( 0.0f, _a/2, _a/2 );
         
 #if 1
         // Sqrt(1) neighbors: There are 6 of these
@@ -167,31 +173,31 @@ __global__ void msd_kernel(const float4 *_old_pos, const float4 *_cur_pos, float
 
 #if 1
         // Sqrt(2) neighbors: There are 12 of these
-        if (co.x > 0 && co.y > 0)
+        if (co.x > 0 & co.y > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,-1,0));
-        if (co.x > 0 && co.y < dims.y-1)
+        if (co.x > 0 & co.y < dims.y-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1, 1,0));
-        if (co.x < dims.x-1 && co.y > 0)
+        if (co.x < dims.x-1 & co.y > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,-1,0));
-        if (co.x < dims.x-1 && co.y < dims.y-1)
+        if (co.x < dims.x-1 & co.y < dims.y-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1, 1,0));
 
-        if (co.x > 0 && co.z > 0)
+        if (co.x > 0 & co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,0,-1));
-        if (co.x > 0 && co.z < dims.z-1)
+        if (co.x > 0 & co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(-1,0, 1));
-        if (co.x < dims.x-1 && co.z > 0)
+        if (co.x < dims.x-1 & co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,0,-1));
-        if (co.x < dims.x-1 && co.z < dims.z-1)
+        if (co.x < dims.x-1 & co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset( 1,0, 1));
 
-        if (co.y > 0 && co.z > 0)
+        if (co.y > 0 & co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0,-1,-1));
-        if (co.y > 0 && co.z < dims.z-1)
+        if (co.y > 0 & co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0,-1, 1));
-        if (co.y < dims.y-1 && co.z > 0)
+        if (co.y < dims.y-1 & co.z > 0)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1,-1));
-        if (co.y < dims.y-1 && co.z < dims.z-1)
+        if (co.y < dims.y-1 & co.z < dims.z-1)
           a += spring_force_rest_2(cur_pos, ValueAtOffset(0, 1, 1));
 #endif
 

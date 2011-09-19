@@ -77,6 +77,10 @@
 #include <cutil.h>
 #include <cutil_gl_error.h>
 #include <cuda_gl_interop.h>
+#include <timer.h>
+
+// CUDA timer definition
+unsigned int timerCUDA = 0;
 
 ////////////////////////////////////////////////////////////////////////////////
 // constants
@@ -86,6 +90,8 @@ const unsigned int window_height = 1024;
 const unsigned int mesh_width = 30;
 const unsigned int mesh_height = 30;
 const unsigned int mesh_depth = 30;
+
+#define MESH_SIZE 1000
 
 // vbo variables (two input, one output)
 GLuint old_vbo, cur_vbo, new_vbo;
@@ -97,6 +103,9 @@ float rotate_x = 0.0, rotate_y = 0.0;
 float translate_z = -3.0;
 float user_a = -0.0018f;
 float user_dt = 0.5f;
+
+__constant__ float4 const_old_pos[MESH_SIZE];
+__constant__ float4 const_cur_pos[MESH_SIZE];
 
 ////////////////////////////////////////////////////////////////////////////////
 // kernels
@@ -164,6 +173,9 @@ void runTest( int argc, char** argv)
 	const float3 offset = make_float3( 0.0f, 2.5f, 0.0f );
 	initializeVBO(old_vbo, offset);
 	initializeVBO(cur_vbo, offset);
+	
+	// Initialize timer
+	CreateTimer(&timerCUDA);
 
 	// run the cuda part
     runCuda();
@@ -199,11 +211,20 @@ void runCuda()
     CUDA_SAFE_CALL(cudaGLMapBufferObject( (void**)&_cur_pos, cur_vbo));
     CUDA_SAFE_CALL(cudaGLMapBufferObject( (void**)&_new_pos, new_vbo));
 
+    //cudaMemcpy(const_old_pos, _old_pos, 16*MESH_SIZE, cudaMemcpyHostToDevice);
+    //cudaMemcpy(const_cur_pos, _cur_pos, 16*MESH_SIZE, cudaMemcpyHostToDevice);
+
     // execute the kernel
 	const unsigned int block_dim_x = 256;
 	dim3 block(block_dim_x, 1, 1);
     dim3 grid(ceil((float)(mesh_width*mesh_height*mesh_depth)/(float)block_dim_x), 1, 1);
+    
+    RestartTimer(timerCUDA);
     msd_kernel<<< grid, block>>>(_old_pos, _cur_pos, _new_pos, make_uint3(mesh_width, mesh_height, mesh_depth), user_a, user_dt);
+    StopTimer(timerCUDA);
+    float average = GetAverage(timerCUDA);
+    if (average > 0)
+       printf("Time(100) %f ms\n", average);
 
     // unmap buffer object
     CUDA_SAFE_CALL(cudaGLUnmapBufferObject( new_vbo));
