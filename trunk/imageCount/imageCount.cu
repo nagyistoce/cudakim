@@ -200,9 +200,10 @@ main( int argc, char** argv)
     printf("[imageMorph]\n");
     int devID;
 
-    char ImageFname[] = "rice.bmp";
+    //char ImageFname[] = "rice.bmp";
     //char ImageFname[] = "ricebw.bmp";
-    char EdgeImageFname[] = "riceEdge.bmp";
+    char ImageFname[] = "E45nord1.bmp";
+    char EdgeImageFname[] = "nordEdge.bmp";
 
     cudaDeviceProp deviceProps;
 
