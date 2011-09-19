@@ -84,19 +84,23 @@ dilateImage( float* dst, float* src, int width)
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
 
+  float pix01 = src[(row - 1) * width + col];
+  float pix10 = src[row * width + col - 1];
   float pix11 = src[row * width + col];
+  float pix12 = src[row * width + col + 1];
+  float pix21 = src[(row + 1) * width + col];
 
   // Dilate morphological operation
-  if (pix11 >= 255.0f)
+  if ( (pix01 >= 255.0f) |
+       (pix10 >= 255.0f) |
+       (pix12 >= 255.0f) |
+       (pix21 >= 255.0f) )
   {
-  	  // pix01
-		dst[(row - 1) * width + col] = 255;
-      // pix10
-		dst[row * width + col - 1] = 255;
-      // pix12
-		dst[row * width + col + 1] = 255;
-      // pix21
-		dst[(row + 1) * width + col] = 255;
+	  dst[row * width + col] = 255.0f;
+  }
+  else
+  {
+	  dst[row * width + col] = pix11;
   }
 
 }
