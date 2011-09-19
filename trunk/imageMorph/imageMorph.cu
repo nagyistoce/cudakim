@@ -164,11 +164,13 @@ float MorphEdgeCUDA1(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size)
     // Generate BW image
     tresholdImage<<< grid, threads >>>(DstBW, Src, Size.width);
     cutilSafeCall(cudaThreadSynchronize());
-    
+
+    /*
     cutilSafeCall(cudaMemcpy2D(Dst, DstStride * sizeof(float),
                                DstBW, DstStride * sizeof(float),
                                Size.width * sizeof(float), Size.height,
                                cudaMemcpyDeviceToDevice));
+    */
 
     // Dilate image with structuring element
     dilateImage<<< grid, threads >>>(Dst, DstBW, Size.width);
