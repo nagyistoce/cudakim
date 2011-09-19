@@ -81,7 +81,7 @@ loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* i
 
     if (res)
     {
-        printf("\nError %d: Image file not found or invalid!\n", res);
+        printf("\nError %d: Image file %s not found or invalid!\n", res, pImageFpath);
         printf("Press ENTER to exit...\n");
         getchar();
 
@@ -165,12 +165,19 @@ float MorphEdgeCUDA1(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size)
     tresholdImage<<< grid, threads >>>(DstBW, Src, Size.width);
     cutilSafeCall(cudaThreadSynchronize());
     
+    cutilSafeCall(cudaMemcpy2D(Dst, DstStride * sizeof(float),
+                               DstBW, DstStride * sizeof(float),
+                               Size.width * sizeof(float), Size.height,
+                               cudaMemcpyDeviceToDevice));
+
+    // Dilate image with structuring element
+    dilateImage<<< grid, threads >>>(Dst, DstBW, Size.width);
     // Erode image with structuring element
-    erodeImage<<< grid, threads >>>(Dst, DstBW, Size.width);
+    //erodeImage<<< grid, threads >>>(Dst, DstBW, Size.width);
     cutilSafeCall(cudaThreadSynchronize());
     
     // Diff BW and eroded image
-    diffImage<<< grid, threads >>>(Diff, Dst, DstBW, Size.width);   
+    diffImage<<< grid, threads >>>(Diff, DstBW, Dst, Size.width);
     cutilSafeCall(cudaThreadSynchronize());
 
     cutilCheckError(cutStopTimer(timerCUDA));

@@ -19,6 +19,7 @@
 #define _TEMPLATE_KERNEL_H_
 
 #include <stdio.h>
+#include "cutil_inline.h"
 #include "sharedmem.cuh"
 
 
@@ -75,7 +76,28 @@ erodeImage( float* dst, float* src, int width)
   
   dst[row * width + col] = sum;  
   
-  __syncthreads();
+}
+
+__global__ void
+dilateImage( float* dst, float* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  float pix11 = src[row * width + col];
+
+  // Dilate morphological operation
+  if (pix11 >= 255.0f)
+  {
+  	  // pix01
+		dst[(row - 1) * width + col] = 255;
+      // pix10
+		dst[row * width + col - 1] = 255;
+      // pix12
+		dst[row * width + col + 1] = 255;
+      // pix21
+		dst[(row + 1) * width + col] = 255;
+  }
 
 }
 
@@ -90,8 +112,6 @@ tresholdImage( float* dst, float* src, int width)
   else
   	dst[row * width + col] = 0;
   
-  //__syncthreads();
-
 }
 
 __global__ void
@@ -102,8 +122,6 @@ diffImage( float *diff, float* dst, float* src, int width)
     
   diff[row * width + col] = src[row * width + col] - dst[row * width + col];
   
-  //__syncthreads();
-
 }
 
 __global__ void
@@ -114,8 +132,6 @@ copyImage( float* dst, float* src, int width)
     
   dst[row * width + col] = src[row * width + col];
   
-  //__syncthreads();
-
 }
 
 #endif // #ifndef _TEMPLATE_KERNEL_H_
