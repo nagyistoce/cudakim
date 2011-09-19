@@ -71,8 +71,8 @@ erodeImage( float* dst, float* src, int width)
 
   // Erode morphological operation
   float sum = pix01 + pix10 + pix11 + pix12 + pix21;
-  if (sum < 255*5) sum = 0;
-  else sum = 255;
+  if (sum < 255.0f*5) sum = 0;
+  else sum = 255.0f;
   
   dst[row * width + col] = sum;  
   
@@ -106,13 +106,13 @@ dilateImage( float* dst, float* src, int width)
 }
 
 __global__ void
-tresholdImage( float* dst, float* src, int width) 
+tresholdImage( float* dst, float* src, int width, int th)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
   
-  if (src[row * width + col] > 110) 
-  	dst[row * width + col] = 255;
+  if (src[row * width + col] > th)
+  	dst[row * width + col] = 255.0f;
   else
   	dst[row * width + col] = 0;
   
