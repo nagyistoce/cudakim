@@ -21,6 +21,26 @@
 #include <stdio.h>
 #include "cutil_inline.h"
 
+__global__ void
+averageImages (byte* dst, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
+{
+	  int rowIdx = blockIdx.y * blockDim.y + threadIdx.y;
+	  int colIdx = blockIdx.x * blockDim.x + threadIdx.x;
+	  byte* imgPtr = (byte *)devPitchedPtr.ptr;
+	  size_t pitch = devPitchedPtr.pitch;
+	  size_t slicePitch = pitch * height;
+	  float sum = 0;
+
+	  // Average of all images
+	  for (int z = 0; z < depth; ++z)
+	  {
+		  byte *slice = imgPtr + z * slicePitch; // Find sliced image
+		  byte *row = slice + rowIdx * pitch; // Find row in image
+		  sum += (float)row[colIdx];
+	  }
+	  // Update average of images
+	  dst[rowIdx * width + colIdx] = (byte) (sum/depth);
+}
 
 __global__ void
 erodeImage( float* dst, float* src, int width) 
