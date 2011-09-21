@@ -228,7 +228,7 @@ main( int argc, char** argv)
 
     //char ImageFname[] = "rice.bmp";
     //char ImageFname[] = "ricebw.bmp";
-    char ImageFname[] = "E45nord%d.bmp";
+    char ImageFname[] = "data/E45nord%d.bmp";
     char EdgeImageFname[] = "nordEdge.bmp";
 
     cudaDeviceProp deviceProps;
