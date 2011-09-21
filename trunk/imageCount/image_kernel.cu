@@ -21,25 +21,66 @@
 #include <stdio.h>
 #include "cutil_inline.h"
 
+// Number of images to analyze
+#define DEPTH 9
+
+// Sorts an array a of length depth
+__device__ void insertionsort(byte *a, int depth)
+{
+	int i, j;
+	byte t;
+	for (i=1; i < depth; i++)
+	{
+		t = a[i];
+		j = i-1;
+		while(t<a[j] && j >= 0)
+		{
+			a[j+1] = a[j];
+			j = j-1;
+		}
+		a[j+1] = t;
+	}
+}
+
 __global__ void
-averageImages (byte* dst, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
+medianImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
 {
 	  int rowIdx = blockIdx.y * blockDim.y + threadIdx.y;
 	  int colIdx = blockIdx.x * blockDim.x + threadIdx.x;
 	  byte* imgPtr = (byte *)devPitchedPtr.ptr;
 	  size_t pitch = devPitchedPtr.pitch;
 	  size_t slicePitch = pitch * height;
-	  float sum = 0;
+	  byte median[DEPTH];
 
 	  // Average of all images
 	  for (int z = 0; z < depth; ++z)
 	  {
 		  byte *slice = imgPtr + z * slicePitch; // Find sliced image
 		  byte *row = slice + rowIdx * pitch; // Find row in image
-		  sum += (float)row[colIdx];
+		  median[z] = row[colIdx];
 	  }
+
+	  insertionsort(median, depth);
+
 	  // Update average of images
-	  dst[rowIdx * width + colIdx] = (byte) (sum/depth);
+	  dst[rowIdx * stride + colIdx] = median[(DEPTH+1)/2];
+}
+
+__global__ void
+test3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
+{
+	  int rowIdx = blockIdx.y * blockDim.y + threadIdx.y;
+	  int colIdx = blockIdx.x * blockDim.x + threadIdx.x;
+	  byte* imgPtr = (byte *)devPitchedPtr.ptr;
+	  size_t pitch = devPitchedPtr.pitch;
+	  size_t slicePitch = pitch * height;
+	  //float sum = 0;
+	  imgPtr += slicePitch*8;
+
+	  byte cp = imgPtr[rowIdx * pitch + colIdx];
+
+	  // Update average of images
+	  dst[rowIdx * stride + colIdx] = cp;
 }
 
 __global__ void
