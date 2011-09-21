@@ -89,8 +89,8 @@ loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* i
     }
 
     //allocate image buffers
-    *imgSrc = MallocCubeByte(ImgWidth, ImgHeight, depth, imgStride);
     *imgDst = MallocPlaneByte(ImgWidth, ImgHeight, imgStride);
+    *imgSrc = MallocCubeByte(ImgWidth, ImgHeight, depth, imgStride);
 
     imgSize->width = ImgWidth;
     imgSize->height = ImgHeight;
@@ -120,7 +120,52 @@ loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* i
     return 0;
 }
 
-float MorphEdgeCUDA1(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size)
+float ImageBackground(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size, int depth)
+{
+    byte *Dst;
+    size_t DstStride;
+    cudaPitchedPtr pitchedSrc; // pitch, void *ptr, xsize, ysize (size_t)
+    cudaPitchedPtr pitchedSrcDev;
+    cudaExtent extent; // depth, height, width (size_t)
+    cudaMemcpy3DParms memcpy3DParms = {0};
+
+
+    extent = make_cudaExtent(Size.width, Size.height, depth);
+    pitchedSrc = make_cudaPitchedPtr(ImgSrc, Stride, Size.width, Size.height);
+
+    // Allocation of memory for 3D source images in byte format
+    cutilSafeCall(cudaMalloc3D(&pitchedSrcDev, extent));
+
+    // Copy images to device memory
+    memcpy3DParms.srcPtr = pitchedSrc;
+    memcpy3DParms.dstPtr = pitchedSrcDev;
+    memcpy3DParms.extent = extent;
+    memcpy3DParms.kind = cudaMemcpyHostToDevice;
+    cutilSafeCall(cudaMemcpy3D(&memcpy3DParms));
+
+    // Allocation of memory for 2D destination image in byte format
+    cutilSafeCall(cudaMallocPitch((void **)(&Dst), &DstStride, Size.width * sizeof(byte), Size.height));
+
+
+    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
+    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+
+    averageImages<<< grid, threads >>>(Dst, pitchedSrcDev, Size.width, Size.height, depth);
+
+
+    cutilSafeCall(cudaMemcpy2D(ImgDst, DstStride * sizeof(byte),
+                                Dst, DstStride * sizeof(byte),
+                                Size.width * sizeof(byte), Size.height,
+                                cudaMemcpyDeviceToHost) );
+
+    cutilSafeCall(cudaFree(pitchedSrc.ptr));
+
+    return 0;
+}
+
+float MorphEdge(byte *ImgSrc, byte *ImgDst, int Stride, ROI Size)
 {    
     float *Dst, *DstBW, *Src, *Diff;
     size_t DstStride, SrcStride, DiffStride;
@@ -225,6 +270,7 @@ main( int argc, char** argv)
 	int ImgStride;
     printf("[imageMorph]\n");
     int devID;
+    int depth = 9;
 
     //char ImageFname[] = "rice.bmp";
     //char ImageFname[] = "ricebw.bmp";
@@ -251,7 +297,7 @@ main( int argc, char** argv)
     printf("CUDA device [%s] has %d Multi-Processors\n", deviceProps.name, deviceProps.multiProcessorCount);
     
     // Load image and allocate memory
-    if (loadImage(ImageFname, argv[0], &ImgSrc, &ImgDst, &ImgSize, &ImgStride, 9))
+    if (loadImage(ImageFname, argv[0], &ImgSrc, &ImgDst, &ImgSize, &ImgStride, depth))
     {
         //finalize
         cutilExit(argc, argv);
@@ -262,9 +308,13 @@ main( int argc, char** argv)
     printf("Image 0[0,%d], 10[0,%d], 11[255,%d], 22[255,%d], 23[0,%d], 256[0,%d]\n", 
             ImgSrc[256], ImgSrc[256*9], ImgSrc[256*10], ImgSrc[256*21], ImgSrc[256*22], ImgSrc[256*255]);
 
-    printf("Erode image\n");
-    float TimeCUDA1 = MorphEdgeCUDA1(ImgSrc, ImgDst, ImgStride, ImgSize);
-    printf("Processing time (ErodeCUDA 1)    : %f ms \n", TimeCUDA1);
+    //printf("Erode image\n");
+    //float TimeCUDA1 = MorphEdge(ImgSrc, ImgDst, ImgStride, ImgSize);
+    //printf("Processing time (ErodeCUDA 1)    : %f ms \n", TimeCUDA1);
+
+    printf("Average image\n");
+    float TimeCUDA1 =  ImageBackground(ImgSrc, ImgDst, ImgStride, ImgSize, depth);
+    printf("Processing time (Background 1)    : %f ms \n", TimeCUDA1);
     
     //dump result of Gold 1 processing
     printf("Success\nDumping result to %s...\n", EdgeImageFname);
