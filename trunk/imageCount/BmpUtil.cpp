@@ -95,6 +95,28 @@ byte *MallocPlaneByte(int width, int height, int *pStepBytes)
 	return ptr;
 }
 
+/**
+**************************************************************************
+*  Memory allocator, returns aligned format frame with 8bpp pixels.
+*
+* \param width			[IN] - Width of image buffer to be allocated
+* \param height			[IN] - Height of image buffer to be allocated
+* \param depth			[IN] - Depth of image buffer to be allocated
+* \param pStepBytes		[OUT] - Step between two sequential rows
+*
+* \return Pointer to the created plane
+*/
+byte *MallocCubeByte(int width, int height, int depth, int *pStepBytes)
+{
+	byte *ptr;
+	*pStepBytes = ((int)ceil(width/16.0f))*16;
+//#ifdef __ALLOW_ALIGNED_MEMORY_MANAGEMENT
+//	ptr = (byte *)_aligned_malloc(*pStepBytes * height, 16);
+//#else
+	ptr = (byte *)malloc(*pStepBytes * height * depth);
+//#endif
+	return ptr;
+}
 
 /**
 **************************************************************************
