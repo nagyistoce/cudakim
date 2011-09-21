@@ -49,36 +49,35 @@
 int g_TotalFailures = 0;
 
 
+byte *NextImage(byte *pImage, int stepBytes, ROI size)
+{
+	return (pImage + (stepBytes*size.height));
+}
+
 // Loads image from file
 // Allocates memory for source and destination of image 
 // based size of image, image type must be bmp
 int 
-loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* imgSize, int *imgStride)
+loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* imgSize, int *imgStride, int depth)
 {
     //preload image (acquire dimensions)
     int ImgWidth, ImgHeight;
+    byte *imgCur;
     //char *pImageFpath = cutFindFilePath(fileName, path);
-    char *pImageFpath = fileName;
+    char ImageName[50];
 
-    int res = PreLoadBmp(pImageFpath, &ImgWidth, &ImgHeight);
-    imgSize->width = ImgWidth;
-    imgSize->height = ImgHeight;
+    sprintf(ImageName, fileName, 1);
 
+    int res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
     if (res)
     {
-        printf("\nError %d: Image file %s not found or invalid!\n", res, pImageFpath);
+        printf("\nError %d: Image file %s not found or invalid!\n", res, ImageName);
         printf("Press ENTER to exit...\n");
         getchar();
 
         return 1;
     }
 
-    //allocate image buffers
-    *imgSrc = MallocPlaneByte(ImgWidth, ImgHeight, imgStride);
-    *imgDst = MallocPlaneByte(ImgWidth, ImgHeight, imgStride);
-
-    //load sample image
-    LoadBmpAsGray(pImageFpath, *imgStride, *imgSize, *imgSrc);
     //check image dimensions are multiples of BLOCK_SIZE
     if (ImgWidth % BLOCK_SIZE != 0 || ImgHeight % BLOCK_SIZE != 0)
     {
@@ -88,8 +87,35 @@ loadImage(char* fileName, const char* path, byte** imgSrc, byte** imgDst, ROI* i
 
         return 1;
     }
+
+    //allocate image buffers
+    *imgSrc = MallocCubeByte(ImgWidth, ImgHeight, depth, imgStride);
+    *imgDst = MallocPlaneByte(ImgWidth, ImgHeight, imgStride);
+
+    imgSize->width = ImgWidth;
+    imgSize->height = ImgHeight;
+    imgCur = *imgSrc;
+
+    //load sample images
+    for (int i = 1; i <= depth; i++)
+    {
+        printf("Loading image %s \n", ImageName);
+    	sprintf(ImageName, fileName, i);
+    	res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
+        if (res)
+        {
+            printf("\nError %d: Image file %s not found or invalid!\n", res, ImageName);
+            printf("Press ENTER to exit...\n");
+            getchar();
+            return 1;
+        }
+
+    	LoadBmpAsGray(ImageName, *imgStride, *imgSize, imgCur);
+    	imgCur = NextImage(imgCur, *imgStride, *imgSize);
+    }
+
     
-    printf("Image size [%d x %d], %d \n", ImgWidth, ImgHeight, *imgStride);
+    printf("Images size [%d * %d * %d], %d \n", ImgWidth, ImgHeight, depth, *imgStride);
     
     return 0;
 }
@@ -202,7 +228,7 @@ main( int argc, char** argv)
 
     //char ImageFname[] = "rice.bmp";
     //char ImageFname[] = "ricebw.bmp";
-    char ImageFname[] = "E45nord1.bmp";
+    char ImageFname[] = "E45nord%d.bmp";
     char EdgeImageFname[] = "nordEdge.bmp";
 
     cudaDeviceProp deviceProps;
@@ -225,7 +251,7 @@ main( int argc, char** argv)
     printf("CUDA device [%s] has %d Multi-Processors\n", deviceProps.name, deviceProps.multiProcessorCount);
     
     // Load image and allocate memory
-    if (loadImage(ImageFname, argv[0], &ImgSrc, &ImgDst, &ImgSize, &ImgStride))
+    if (loadImage(ImageFname, argv[0], &ImgSrc, &ImgDst, &ImgSize, &ImgStride, 9))
     {
         //finalize
         cutilExit(argc, argv);

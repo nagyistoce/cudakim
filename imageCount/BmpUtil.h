@@ -109,6 +109,7 @@ extern "C"
 	int clamp_0_255(int x);
 	float round_f(float num);
 	byte *MallocPlaneByte(int width, int height, int *pStepBytes);
+	byte *MallocCubeByte(int width, int height, int depth, int *pStepBytes);
 	short *MallocPlaneShort(int width, int height, int *pStepBytes);
 	float *MallocPlaneFloat(int width, int height, int *pStepBytes);
 	void CopyByte2Float(byte *ImgSrc, int StrideB, float *ImgDst, int StrideF, ROI Size);
