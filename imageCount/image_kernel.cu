@@ -43,7 +43,7 @@ __device__ void insertionsort(byte *a, int depth)
 }
 
 __global__ void
-medianImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
+median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
 {
 	  int rowIdx = blockIdx.y * blockDim.y + threadIdx.y;
 	  int colIdx = blockIdx.x * blockDim.x + threadIdx.x;

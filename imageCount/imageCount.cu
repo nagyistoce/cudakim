@@ -150,7 +150,7 @@ float ImageBackground(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int dept
     printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
 
-    medianImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
+    median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
     //test3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
     cutilSafeCall(cudaThreadSynchronize());
 
