@@ -33,7 +33,7 @@ __device__ void insertionsort(byte *a, int depth)
 	{
 		t = a[i];
 		j = i-1;
-		while(t<a[j] && j >= 0)
+		while(t < a[j] && j >= 0)
 		{
 			a[j+1] = a[j];
 			j = j-1;
@@ -81,6 +81,16 @@ test3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, in
 
 	  // Update average of images
 	  dst[rowIdx * stride + colIdx] = cp;
+}
+
+__global__ void
+diffImageByte( byte* diff, byte* back, byte* src, int stride)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  diff[row * stride + col] = abs(src[row * stride + col] - back[row * stride + col]);
+
 }
 
 __global__ void
