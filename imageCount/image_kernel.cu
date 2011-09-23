@@ -94,13 +94,20 @@ diffImageByte( byte* diff, byte* back, byte* src, int stride)
 }
 
 __global__ void
-erodeImage( float* dst, float* src, int width) 
+erodeImage( float* dst, float* src, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
   
   // read in input data from global memory
   // Structuring element
+  /*
+  float pix01 = (row > 0 ? src[(row - 1) * width + col] : 0);
+  float pix10 = (col > 0 ? src[row * width + col - 1] : 0);
+  float pix11 = src[row * width + col];
+  float pix12 = (col < width - 1 ? src[row * width + col + 1] : 0);
+  float pix21 = (row < height - 1 ? src[(row + 1) * width + col] : 0);
+  */
   float pix01 = src[(row - 1) * width + col];
   float pix10 = src[row * width + col - 1];
   float pix11 = src[row * width + col];
@@ -118,6 +125,33 @@ erodeImage( float* dst, float* src, int width)
 
 __global__ void
 dilateImage( float* dst, float* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  float pix01 = src[(row - 1) * width + col];
+  float pix10 = src[row * width + col - 1];
+  float pix11 = src[row * width + col];
+  float pix12 = src[row * width + col + 1];
+  float pix21 = src[(row + 1) * width + col];
+
+  // Dilate morphological operation
+  if ( (pix01 >= 255.0f) |
+       (pix10 >= 255.0f) |
+       (pix12 >= 255.0f) |
+       (pix21 >= 255.0f) )
+  {
+	  dst[row * width + col] = 255.0f;
+  }
+  else
+  {
+	  dst[row * width + col] = pix11;
+  }
+
+}
+
+__global__ void
+dilateSE5Image( float* dst, float* src, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;

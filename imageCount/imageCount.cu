@@ -37,6 +37,7 @@
 
 // includes, bmp utilities
 #include "BmpUtil.h"
+#include "timer.h"
 
 // includes, kernels
 #include "image_kernel.cu"
@@ -46,6 +47,8 @@
 */
 #define BLOCK_SIZE			16
 
+static unsigned int timerCUDA = 0;
+static unsigned int timerTotalCUDA = 0;
 int g_TotalFailures = 0;
 
 
@@ -192,8 +195,10 @@ float ImageBackgroundDiff(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int 
     printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
     printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
-
+    RestartTimer(timerCUDA);
     median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
+    StopTimer(timerCUDA);
+    float time = GetTimer(timerCUDA);
     //test3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
     cutilSafeCall(cudaThreadSynchronize());
 
@@ -207,7 +212,7 @@ float ImageBackgroundDiff(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int 
 
     cutilSafeCall(cudaFree(memcpy3DParms.dstPtr.ptr));
 
-    return 0;
+    return time;
 }
 
 // Find background image based on 3D cube of images
@@ -240,9 +245,11 @@ float ImageBackground(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int dept
     printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
     printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
-
+    RestartTimer(timerCUDA);
     median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
     //test3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
+    StopTimer(timerCUDA);
+    float time = GetTimer(timerCUDA);
     cutilSafeCall(cudaThreadSynchronize());
 
     printf("Copy result to host\n");
@@ -253,7 +260,7 @@ float ImageBackground(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int dept
 
     cutilSafeCall(cudaFree(memcpy3DParms.dstPtr.ptr));
 
-    return 0;
+    return time;
 }
 
 float ImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStride, int IBStride)
@@ -293,7 +300,10 @@ float ImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStrid
     printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
     printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
+    RestartTimer(timerCUDA);
     diffImageByte<<< grid, threads >>>(Diff, Back, Src, SrcStride);
+    StopTimer(timerCUDA);
+    float time = GetTimer(timerCUDA);
 
     cutilSafeCall(cudaMemcpy2D(ImgDst, IBStride * sizeof(byte),
                                 Diff, DiffStride * sizeof(byte),
@@ -305,11 +315,11 @@ float ImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStrid
     cutilSafeCall(cudaFree(Back));
     cutilSafeCall(cudaFree(Src));
 
-    return 0;
+    return time;
 }
 
 // Performs thresholding and morphological operations like dilation and erode of image
-float MorphEdge(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
+float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
 {    
     float *Dst, *DstBW, *Src, *Diff;
     size_t DstStride, SrcStride, DiffStride;
@@ -346,10 +356,7 @@ float MorphEdge(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     //create and start CUDA timer
-    unsigned int timerCUDA = 0;
-    cutilCheckError(cutCreateTimer(&timerCUDA));
-    cutilCheckError(cutResetTimer(timerCUDA));
-    cutilCheckError(cutStartTimer(timerCUDA));
+    RestartTimer(timerCUDA);
     
     //copy image from device memory to device memory
     /*
@@ -367,22 +374,20 @@ float MorphEdge(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     cutilSafeCall(cudaThreadSynchronize());
 
     // Erode image with structuring element
-    //erodeImage<<< grid, threads >>>(Diff, DstBW, Stride);
+    erodeImage<<< grid, threads >>>(Dst, DstBW, DstStride);
     // Dilate image with structuring element
-    dilateImage<<< grid, threads >>>(Diff, DstBW, DstStride);
+    dilateImage<<< grid, threads >>>(Diff, Dst, DstStride);
+    //dilateImage<<< grid, threads >>>(Diff, DstBW, DstStride);
     cutilSafeCall(cudaThreadSynchronize());
     
     // Diff BW and eroded image
     //diffImage<<< grid, threads >>>(Diff, DstBW, Dst, Size.width);
     //cutilSafeCall(cudaThreadSynchronize());
 
-    cutilCheckError(cutStopTimer(timerCUDA));
+    StopTimer(timerCUDA);
+    float time = GetTimer(timerCUDA);
 
     cutilCheckMsg("Kernel execution failed");
-
-    // finalize CUDA timer
-    float TimerCUDASpan = cutGetAverageTimerValue(timerCUDA);
-    cutilCheckError(cutDeleteTimer(timerCUDA));
 
     //copy eroded image from device memory to host memory in Src
     cutilSafeCall(cudaMemcpy2D(ImgSrcF, ImgSrcFStride * sizeof(float), 
@@ -400,7 +405,7 @@ float MorphEdge(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     FreePlane(ImgSrcF);
 
     //return time taken by the operation
-    return TimerCUDASpan;
+    return time;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -443,7 +448,12 @@ main( int argc, char** argv)
     // get number of SMs on this GPU
     cutilSafeCall(cudaGetDeviceProperties(&deviceProps, devID));
     printf("CUDA device [%s] has %d Multi-Processors\n", deviceProps.name, deviceProps.multiProcessorCount);
-    
+
+    // Initialize timer
+	CreateTimer(&timerCUDA);
+	CreateTimer(&timerTotalCUDA);
+	StartTimer(timerTotalCUDA);
+
     // Load images 1-9 and allocate memory
     if (loadImages(ImageFname, argv[0], &ImgSrc, &ImgSize, &ImgSrcStride, depth))
     {
@@ -489,14 +499,18 @@ main( int argc, char** argv)
 		//dump result of Gold 1 processing
 	    //printf("Erode image\n");
 
-		TimeCUDA = MorphEdge(ImgDst, ImgBW, ImgSize, ImgBWStride);
-	    printf("Processing time (Dilate)    : %f ms \n", TimeCUDA);
+		TimeCUDA = MorphObjects(ImgDst, ImgBW, ImgSize, ImgBWStride);
+	    printf("Processing time (Morph)    : %f ms \n", TimeCUDA);
 
 		sprintf(ImageName, TestImageFname, i);
 		printf("Success\nDumping result to %s...\n", ImageName);
 		//DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
 		DumpBmpAsGray(ImageName, ImgBW, ImgBWStride, ImgSize);
     }
+
+    StopTimer(timerTotalCUDA);
+    float time = GetTimer(timerTotalCUDA);
+    printf("Processing time (Total)    : %f ms \n", time);
 
 
     //release byte planes
