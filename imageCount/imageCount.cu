@@ -318,6 +318,58 @@ float ImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStrid
     return time;
 }
 
+/* Matlab version
+ *
+function [res] = DiffBWImg(X0, X1)
+%% returns 0 if images are equal
+
+diff = X0 - X1;
+res = max(diff(:));
+
+end
+
+nhood = [0 1 0; 1 1 1; 0 1 0];
+B = strel('arbitrary',nhood);
+
+% Perform extraction of connected components
+k = 1;
+n = 2;
+%A = bw1;
+A = bw;
+Xres = A;
+
+while 1 % Finds all components
+
+h = find(Xres == 1); % Vector for white pixels not yet found
+if (isempty(h))
+    break; % No more components found
+end;
+
+% Select picture with one white pixel not yet found
+Xk_1 = zeros(size(bw));
+Xk_1(h(1)) = 1;
+
+while 1 % Finds one component
+    Xk = imdilate(Xk_1, B) & A;
+    if DiffBWImg(Xk, Xk_1) == 1 % not equal
+        k = k + 1;
+        Xk_1 = Xk;
+    else % equal
+        h = find(Xk == 1);
+        Xres(h) = n;
+        n = n + 1;
+        break;
+    end;
+end;
+
+end;
+*/
+float LabelObjects(float *bw, float *dst, int stride, dim3 grid, dim3 threads)
+{
+	int k = 1, n = 2;
+	return 0;
+}
+
 // Performs thresholding and morphological operations like dilation and erode of image
 float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
 {    
@@ -380,6 +432,9 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     //dilateImage<<< grid, threads >>>(Diff, DstBW, DstStride);
     cutilSafeCall(cudaThreadSynchronize());
     
+    //
+    LabelObjects(Diff, Dst, DstStride, grid, threads);
+
     // Diff BW and eroded image
     //diffImage<<< grid, threads >>>(Diff, DstBW, Dst, Size.width);
     //cutilSafeCall(cudaThreadSynchronize());
