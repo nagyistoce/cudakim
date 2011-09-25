@@ -8,8 +8,8 @@
 #include <cutil_inline.h>
 
 #define WINDOW 100
-float timerAverage[WINDOW];
-unsigned int idx;
+static float timerAverage[WINDOW];
+static unsigned int idx;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Timer functions
