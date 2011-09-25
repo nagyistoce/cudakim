@@ -42,6 +42,9 @@
 // includes, kernels
 #include "image_kernel.cu"
 
+// External defined function
+float ThrustImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStride, int IBStride);
+
 /**
 *  The dimension of pixels block 16x16
 */
@@ -549,6 +552,7 @@ main( int argc, char** argv)
     for (int i = 1; i <= depth; i++)
     {
 		TimeCUDA = ImageDiff(ImgBack, ImgCur, ImgDst, ImgSize, ImgSrcStride, ImgBackStride);
+		//TimeCUDA = ThrustImageDiff(ImgBack, ImgCur, ImgDst, ImgSize, ImgSrcStride, ImgBackStride);
 		printf("Processing time (Difference)    : %f ms \n", TimeCUDA);
 		ImgCur = NextImage(ImgCur, ImgSrcStride, ImgSize);
 		//dump result of Gold 1 processing
