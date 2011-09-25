@@ -49,9 +49,10 @@
 #include <iterator>
 
 // includes, timer utilities
-#include "timer.h"
+#include "BmpUtil.h"
+//#include "timer.h"
 
-static unsigned int timerCUDA = 0;
+//static unsigned int timerCUDA = 0;
 
 struct func_diff_byte
 {
@@ -72,7 +73,7 @@ float ThrustImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int I
 
     cudaEventCreate(&start);
     cudaEventCreate(&end);
-    if (timerCUDA == 0) CreateTimer(&timerCUDA);
+    //if (timerCUDA == 0) CreateTimer(&timerCUDA);
     cudaEventRecord(start,0);
 
     thrust::host_vector<byte> hostImgBack(ImgSize);
@@ -90,11 +91,11 @@ float ThrustImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int I
     thrust::device_vector<byte> devImgSrc = hostImgSrc;
     thrust::device_vector<byte> devImgDst(ImgSize);
 
-    StartTimer(timerCUDA);
+    //StartTimer(timerCUDA);
     func_diff_byte FuncDiff;
     thrust::transform(devImgSrc.begin(), devImgSrc.end(),
     		          devImgBack.begin(), devImgDst.begin(), FuncDiff);
-    StopTimer(timerCUDA);
+    //StopTimer(timerCUDA);
 
     // transfer data back to host
     thrust::copy(devImgDst.begin(), devImgDst.end(), hostImgSrc.begin());

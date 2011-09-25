@@ -89,8 +89,8 @@ CWARN_FLAGS := $(CXXWARN_FLAGS) \
 # architecture flag for nvcc and gcc compilers build
 CUBIN_ARCH_FLAG :=
 CXX_ARCH_FLAGS  :=
-#NVCCFLAGS       :=
-NVCCFLAGS       := --ptxas-options="-v"
+NVCCFLAGS       :=
+#NVCCFLAGS       := --ptxas-options="-v"
 LIB_ARCH        := $(OSARCH)
 
 # Determining the necessary Cross-Compilation Flags
