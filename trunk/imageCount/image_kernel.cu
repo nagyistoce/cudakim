@@ -94,6 +94,17 @@ diffImageByte( byte* diff, byte* back, byte* src, int stride)
 }
 
 __global__ void
+setImageByte( byte* dst, int stride, int x, int y, byte val)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (row == x & col == y)
+    dst[row * stride + col] = val;
+
+}
+
+__global__ void
 erodeImage( float* dst, float* src, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -202,29 +213,33 @@ dilateImageByte( byte* dst, byte* src, int width)
 }
 
 __global__ void
-dilateSE5Image( float* dst, float* src, int width)
+dilateOriginalImageByte( byte* dst, byte* src, byte *org, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-  float pix01 = src[(row - 1) * width + col];
-  float pix10 = src[row * width + col - 1];
-  float pix11 = src[row * width + col];
-  float pix12 = src[row * width + col + 1];
-  float pix21 = src[(row + 1) * width + col];
+  byte pix01 = src[(row - 1) * width + col];
+  byte pix10 = src[row * width + col - 1];
+  byte pix11 = src[row * width + col];
+  byte pix12 = src[row * width + col + 1];
+  byte pix21 = src[(row + 1) * width + col];
+  byte res;
 
   // Dilate morphological operation
-  if ( (pix01 >= 255.0f) |
-       (pix10 >= 255.0f) |
-       (pix12 >= 255.0f) |
-       (pix21 >= 255.0f) )
+  if ( (pix01 == 255) |
+       (pix10 == 255) |
+       (pix12 == 255) |
+       (pix21 == 255) )
   {
-	  dst[row * width + col] = 255.0f;
+	  res = 255;
   }
   else
   {
-	  dst[row * width + col] = pix11;
+	  res = pix11;
   }
+
+  // Anded original
+  dst[row * width + col] = res & org[row * width + col];
 
 }
 
@@ -255,6 +270,16 @@ tresholdImageByte( byte* dst, byte* src, int width, byte th)
 }
 
 __global__ void
+lableImageObject( byte* dst, byte* src, int stride, byte lable)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (src[row * stride + col] > 0)
+	  dst[row * stride + col] = lable;
+}
+
+__global__ void
 diffImage( float *diff, float* dst, float* src, int width) 
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -272,6 +297,15 @@ copyImage( float* dst, float* src, int width)
     
   dst[row * width + col] = src[row * width + col];
   
+}
+__global__ void
+diffImageReduced( byte* dst, byte* xk, byte *xk1, int stride)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  dst[row * stride + col] = abs(xk[row * stride + col] - xk1[row * stride + col]);
+
 }
 
 #endif // #ifndef _TEMPLATE_KERNEL_H_
