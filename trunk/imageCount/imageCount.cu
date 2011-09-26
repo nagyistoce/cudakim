@@ -371,26 +371,61 @@ end;
 end;
 */
 
-float LabelObjects(byte *dst, byte *bw, ROI Size, int stride, dim3 grid, dim3 threads)
+typedef struct
 {
-	int x, y, k = 1, n = 2;
-	bool found = false;
-	int ImgResStride;
+	int x;			//!< ROI width
+	int y;			//!< ROI height
+} POINT;
 
-    byte *ImgRes = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
+
+bool findPoint(byte *img, ROI Size, int Stride, byte val, POINT *point)
+{
+	int x, y;
+	bool found = false;
 
 	// Search white pixel part of
 	for (x = 0; x < Size.height; x++) {
 		for (y = 0; y < Size.width; y++) {
-			byte pixel = bw[x*stride + y];
-			if (pixel >= 255.0f) {
+			byte pixel = img[x*Stride + y];
+			if (pixel >= val) {
+				point->x = x;
+				point->y = y;
 				found = true;
 				break;
 			}
 		}
 	}
+	return found;
+}
 
-	FreePlane(ImgRes);
+float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, dim3 grid, dim3 threads)
+{
+	int k = 1, n = 2;
+	POINT point;
+	int ImgResStride;
+
+    byte *ImgA = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
+    byte *ImgXres = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
+    byte *ImgXk1 = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
+
+    cutilSafeCall(cudaMemcpy2D(ImgA, ImgResStride * sizeof(byte),
+    						   bw, Stride * sizeof(byte),
+                               Size.width * sizeof(byte), Size.height,
+                               cudaMemcpyHostToHost) );
+
+    cutilSafeCall(cudaMemcpy2D(ImgXres, ImgResStride * sizeof(byte),
+    						   bw, Stride * sizeof(byte),
+                               Size.width * sizeof(byte), Size.height,
+                               cudaMemcpyHostToHost) );
+
+    while (true)
+    {
+    	if (!findPoint(ImgXres, Size, Stride, 255, &point))
+    		break;
+    }
+
+	FreePlane(ImgXres);
+	FreePlane(ImgA);
 
 	// Find first
 	return 0;
