@@ -149,6 +149,39 @@ dilateImageByte( byte* dst, byte* src, int width)
 }
 
 __global__ void
+dilate5SEImageByte( byte* dst, byte* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  byte pix11 = src[row * width + col];
+
+  // Dilate morphological operation SE[5x5]
+  if (
+	   (src[(row - 2) * width + col] == 255) |
+	   (src[(row - 1) * width + col - 1] == 255) |
+	   (src[(row - 1) * width + col] == 255) |
+	   (src[(row - 1) * width + col + 1] == 255) |
+	   (src[row * width + col - 2] == 255) |
+	   (src[row * width + col - 1] == 255) |
+       (src[row * width + col + 1] == 255) |
+       (src[row * width + col + 2] == 255) |
+       (src[(row + 1) * width + col - 1] == 255) |
+       (src[(row + 1) * width + col] == 255) |
+       (src[(row + 1) * width + col + 1] == 255) |
+       (src[(row + 2) * width + col] == 255)
+       )
+  {
+	  dst[row * width + col] = 255;
+  }
+  else
+  {
+	  dst[row * width + col] = pix11;
+  }
+
+}
+
+__global__ void
 tresholdImageFloat( float* dst, float* src, int width, int th)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -286,7 +319,8 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     // Erode image with structuring element
     erodeImageByte<<< grid, threads >>>(Dst1, DstBW, DstStride);
     // Dilate image with structuring element
-    dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
+    //dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
+    dilate5SEImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
 
     StopTimer(timerCUDA);
 
