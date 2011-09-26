@@ -56,6 +56,9 @@ $(BINARY): $(BINARY).o BmpUtil.o imageCount.o deviceUtil.o imageBackground.o ima
 BmpUtil.o: BmpUtil.cpp
 	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
 
+imageLoader.o: imageLoader.cpp
+	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
+
 imageCount.o: imageCount.cu
 	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
 
@@ -63,9 +66,6 @@ deviceUtil.o: deviceUtil.cu
 	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
 	
 imageBackground.o: imageBackground.cu
-	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
-
-imageLoader.o: imageLoader.cu
 	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
 
 labelObjects.o: labelObjects.cu
