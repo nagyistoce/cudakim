@@ -114,9 +114,10 @@ main( int argc, char** argv)
 
     //printf("Image src stride %d\n", ImgSrcStride);
 
+#if 1 // Save temporary background image in file
     TimeCUDA = ImageBackground(ImgDst, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
-    
+
     //Dump result of finding background image
     printf("Dumping background image to %s...\n", BackImageFname);
     DumpBmpAsGray(BackImageFname, ImgDst, ImgDstStride, ImgSize);
@@ -132,6 +133,10 @@ main( int argc, char** argv)
         cutilExit(argc, argv);
         return 1;
     }
+#else
+    TimeCUDA = ImageBackground(ImgBack, ImgSrc, ImgSize, ImgSrcStride, depth);
+    printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
+#endif
 
     // Allocate BW image
     ImgDiff = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBWStride);
