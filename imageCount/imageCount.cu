@@ -50,6 +50,15 @@
 
 static unsigned int timerTotalCUDA = 0;
 
+/* Remaining work -
+* - Color result images
+* - Update input images using matlab - remove header time
+* - Gausian bluring of diff images
+* - Optimize labelObjects
+* - Run computeprof
+* - Document results
+*/
+
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
