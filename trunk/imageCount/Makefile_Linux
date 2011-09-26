@@ -50,13 +50,31 @@ LIBS += -L$(CUDA_SDK)/lib -lcutil_$(LIB_ARCH)
 
 BINARY=imageCount
 
-$(BINARY): $(BINARY).o BmpUtil.o imageCount.o
+$(BINARY): $(BINARY).o BmpUtil.o imageCount.o deviceUtil.o imageBackground.o imageLoader.o labelObjects.o locateObjects.o imageThrust.o
 	$(LINK) $(CXX_ARCH_FLAGS) $^ -o $(BINARY) $(LIBS) $(GL_LIBS)
 
 BmpUtil.o: BmpUtil.cpp
 	$(CC) $(CXX_ARCH_FLAGS) -c $(INCLUDES) $< -o $@
 
 imageCount.o: imageCount.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+
+deviceUtil.o: deviceUtil.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+	
+imageBackground.o: imageBackground.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+
+imageLoader.o: imageLoader.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+
+labelObjects.o: labelObjects.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+
+locateObjects.o: locateObjects.cu
+	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
+
+imageThrust.o: imageThrust.cu
 	$(NVCC) $(NVCCFLAGS) -c $(INCLUDES) $< -o $@
 
 clean:

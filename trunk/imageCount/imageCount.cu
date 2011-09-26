@@ -36,654 +36,19 @@
 #include <cutil_inline.h>
 
 // includes, bmp utilities
+#include "defs.h"
 #include "BmpUtil.h"
 #include "timer.h"
+#include "imageLoader.h"
+#include "deviceUtil.h"
 
-// includes, kernels
-#include "image_kernel.cu"
+// includes, kernels and functions
+#include "imageBackground.h"
+#include "locateObjects.h"
+#include "labelObjects.h"
+#include "imageThrust.h"
 
-// External defined function
-float ThrustImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStride, int IBStride);
-
-/**
-*  The dimension of pixels block 16x16
-*/
-#define BLOCK_SIZE			16
-
-static unsigned int timerCUDA = 0;
 static unsigned int timerTotalCUDA = 0;
-int g_TotalFailures = 0;
-
-
-byte *NextImage(byte *pImage, int imgStride, ROI size)
-{
-	return (pImage + (imgStride*size.height));
-}
-
-// Loads image from file
-// Allocates memory for source and destination of image 
-// based size of image, image type must be bmp
-int 
-loadImage(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *imgStride)
-{
-    //preload image (acquire dimensions)
-    int ImgWidth, ImgHeight;
-    //char *pImageFpath = cutFindFilePath(fileName, path);
-    char *pImageFpath = fileName;
-
-    int res = PreLoadBmp(pImageFpath, &ImgWidth, &ImgHeight);
-    imgSize->width = ImgWidth;
-    imgSize->height = ImgHeight;
-
-    if (res)
-    {
-        printf("\nError %d: Image file %s not found or invalid!\n", res, pImageFpath);
-        printf("Press ENTER to exit...\n");
-        getchar();
-
-        return 1;
-    }
-
-    //allocate image buffers
-    *imgSrc = MallocPlaneByte(ImgWidth, ImgHeight, imgStride);
-
-    //load sample image
-    LoadBmpAsGray(pImageFpath, *imgStride, *imgSize, *imgSrc);
-    //check image dimensions are multiples of BLOCK_SIZE
-    if (ImgWidth % BLOCK_SIZE != 0 || ImgHeight % BLOCK_SIZE != 0)
-    {
-        printf("\nError: Input image dimensions must be multiples of 8!\n");
-        printf("Press ENTER to exit...\n");
-        getchar();
-
-        return 1;
-    }
-
-    printf("Image size [%d x %d], %d \n", ImgWidth, ImgHeight, *imgStride);
-
-    return 0;
-}
-
-// Loads image from files 1-9
-// Allocates memory for source images in 3D cube
-// based size of image, image type must be bmp
-int
-loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *imgStride, int depth)
-{
-    //preload image (acquire dimensions)
-    int ImgWidth, ImgHeight;
-    byte *imgCur;
-    //char *pImageFpath = cutFindFilePath(fileName, path);
-    char ImageName[50];
-
-    sprintf(ImageName, fileName, 1);
-
-    int res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
-    if (res)
-    {
-        printf("\nError %d: Image file %s not found or invalid!\n", res, ImageName);
-        printf("Press ENTER to exit...\n");
-        getchar();
-
-        return 1;
-    }
-
-    //check image dimensions are multiples of BLOCK_SIZE
-    if (ImgWidth % BLOCK_SIZE != 0 || ImgHeight % BLOCK_SIZE != 0)
-    {
-        printf("\nError: Input image dimensions must be multiples of 8!\n");
-        printf("Press ENTER to exit...\n");
-        getchar();
-
-        return 1;
-    }
-
-    //allocate image buffers
-    *imgSrc = MallocCubeByte(ImgWidth, ImgHeight, depth, imgStride);
-
-    imgSize->width = ImgWidth;
-    imgSize->height = ImgHeight;
-    imgCur = *imgSrc;
-
-    //load sample images
-    for (int i = 1; i <= depth; i++)
-    {
-        printf("Loading image %s [%d,%d] \n", ImageName, ImgWidth, ImgHeight);
-    	sprintf(ImageName, fileName, i);
-    	res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
-        if (res)
-        {
-            printf("\nError %d: Image file %s not found or invalid!\n", res, ImageName);
-            printf("Press ENTER to exit...\n");
-            getchar();
-            return 1;
-        }
-
-    	LoadBmpAsGray(ImageName, *imgStride, *imgSize, imgCur);
-    	imgCur = NextImage(imgCur, *imgStride, *imgSize);
-    }
-
-    
-    printf("Images size [%d * %d * %d], %d \n", ImgWidth, ImgHeight, depth, *imgStride);
-    
-    return 0;
-}
-
-// NOT YET COMPLETED ! - kbe???
-/*
-float ImageBackgroundDiff(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int depth)
-{
-    byte *Dst;
-    size_t DstStride;
-    cudaMemcpy3DParms memcpy3DParms = {0};
-
-    // Create src pointer and extent
-    memcpy3DParms.srcPtr = make_cudaPitchedPtr(ImgSrc, Stride, Size.width, Size.height);
-    memcpy3DParms.extent = make_cudaExtent(Size.width * sizeof(byte), Size.height, depth);
-
-    // Allocation of memory for 3D source images in byte format
-    cutilSafeCall(cudaMalloc3D(&memcpy3DParms.dstPtr, memcpy3DParms.extent));
-
-    printf("srcPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.srcPtr.pitch, memcpy3DParms.srcPtr.xsize, memcpy3DParms.srcPtr.ysize);
-    printf("dstPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.dstPtr.pitch, memcpy3DParms.dstPtr.xsize, memcpy3DParms.dstPtr.ysize);
-
-    // Copy images to device memory
-    memcpy3DParms.kind = cudaMemcpyHostToDevice;
-    cutilSafeCall(cudaMemcpy3D(&memcpy3DParms));
-
-    // Allocation of memory for 2D destination image in byte format
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst), &DstStride, Size.width * sizeof(byte), Size.height));
-
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid( ceil((float)Size.width / BLOCK_SIZE), ceil((float)Size.height / BLOCK_SIZE) );
-
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    RestartTimer(timerCUDA);
-    median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
-    StopTimer(timerCUDA);
-    float time = GetTimer(timerCUDA);
-    //test3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    //diff3DImages
-
-    printf("Copy result to host\n");
-    cutilSafeCall(cudaMemcpy2D(ImgDst, Size.width * sizeof(byte),
-                                Dst, DstStride * sizeof(byte),
-                                Size.width * sizeof(byte), Size.height,
-                                cudaMemcpyDeviceToHost) );
-
-    cutilSafeCall(cudaFree(memcpy3DParms.dstPtr.ptr));
-
-    return time;
-}
-*/
-
-// Find background image based on 3D cube of images
-float ImageBackground(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int depth)
-{
-    byte *Dst;
-    size_t DstStride;
-    cudaMemcpy3DParms memcpy3DParms = {0};
-
-    // Create src pointer and extent
-    memcpy3DParms.srcPtr = make_cudaPitchedPtr(ImgSrc, Stride, Size.width, Size.height);
-    memcpy3DParms.extent = make_cudaExtent(Size.width * sizeof(byte), Size.height, depth);
-
-    // Allocation of memory for 3D source images in byte format
-    cutilSafeCall(cudaMalloc3D(&memcpy3DParms.dstPtr, memcpy3DParms.extent));
-
-    printf("srcPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.srcPtr.pitch, memcpy3DParms.srcPtr.xsize, memcpy3DParms.srcPtr.ysize);
-    printf("dstPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.dstPtr.pitch, memcpy3DParms.dstPtr.xsize, memcpy3DParms.dstPtr.ysize);
-
-    // Copy images to device memory
-    memcpy3DParms.kind = cudaMemcpyHostToDevice;
-    cutilSafeCall(cudaMemcpy3D(&memcpy3DParms));
-
-    // Allocation of memory for 2D destination image in byte format
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst), &DstStride, Size.width * sizeof(byte), Size.height));
-
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid( ceil((float)Size.width / BLOCK_SIZE), ceil((float)Size.height / BLOCK_SIZE) );
-
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    RestartTimer(timerCUDA);
-    median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
-    //test3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
-    StopTimer(timerCUDA);
-    float time = GetTimer(timerCUDA);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    printf("Copy result to host\n");
-    cutilSafeCall(cudaMemcpy2D(ImgDst, Size.width * sizeof(byte),
-                                Dst, DstStride * sizeof(byte),
-                                Size.width * sizeof(byte), Size.height,
-                                cudaMemcpyDeviceToHost) );
-
-    cutilSafeCall(cudaFree(memcpy3DParms.dstPtr.ptr));
-
-    return time;
-}
-
-float ImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStride, int IBStride)
-{
-    byte  *Diff, *Back, *Src;
-    size_t DiffStride, SrcStride, BackStride;
-
-    // Allocation of device memory for 2D difference image
-    cutilSafeCall(cudaMallocPitch((void **)(&Diff), &DiffStride, Size.width * sizeof(byte), Size.height));
-    DiffStride /= sizeof(byte);
-    printf("DiffStride %d\n", DiffStride);
-
-    // Allocation of memory for 2D background and source image in byte format
-    cutilSafeCall(cudaMallocPitch((void **)(&Back), &BackStride, Size.width * sizeof(byte), Size.height));
-    BackStride /= sizeof(byte);
-    printf("BackStride %d\n", BackStride);
-
-    cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(byte), Size.height));
-    SrcStride /= sizeof(byte);
-    printf("SrcStride %d\n", SrcStride);
-
-    //copy background image from host memory to device
-    cutilSafeCall(cudaMemcpy2D(Back, BackStride * sizeof(byte),
-                               ImgBack, IBStride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-    //copy source image from host memory to device
-    cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(byte),
-                               ImgSrc, ISStride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid( ceil((float)Size.width / BLOCK_SIZE), ceil((float)Size.height / BLOCK_SIZE) );
-
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    RestartTimer(timerCUDA);
-    diffImageByte<<< grid, threads >>>(Diff, Back, Src, SrcStride);
-    StopTimer(timerCUDA);
-    float time = GetTimer(timerCUDA);
-
-    cutilSafeCall(cudaMemcpy2D(ImgDst, IBStride * sizeof(byte),
-                                Diff, DiffStride * sizeof(byte),
-                                Size.width * sizeof(byte), Size.height,
-                                cudaMemcpyDeviceToHost) );
-
-    //clean up memory
-    cutilSafeCall(cudaFree(Diff));
-    cutilSafeCall(cudaFree(Back));
-    cutilSafeCall(cudaFree(Src));
-
-    return time;
-}
-
-/* Matlab version
- *
-function [res] = DiffBWImg(X0, X1)
-%% returns 0 if images are equal
-
-diff = X0 - X1;
-res = max(diff(:));
-
-end
-
-nhood = [0 1 0; 1 1 1; 0 1 0];
-B = strel('arbitrary',nhood);
-
-% Perform extraction of connected components
-k = 1;
-n = 2;
-%A = bw1;
-A = bw;
-Xres = A;
-
-while 1 % Finds all components
-
-h = find(Xres == 1); % Vector for white pixels not yet found
-if (isempty(h))
-    break; % No more components found
-end;
-
-% Select picture with one white pixel not yet found
-Xk_1 = zeros(size(bw));
-Xk_1(h(1)) = 1;
-
-while 1 % Finds one component
-    Xk = imdilate(Xk_1, B) & A;
-    if DiffBWImg(Xk, Xk_1) == 1 % not equal
-        k = k + 1;
-        Xk_1 = Xk;
-    else % equal
-        h = find(Xk == 1);
-        Xres(h) = n;
-        n = n + 1;
-        break;
-    end;
-end;
-
-end;
-*/
-
-bool findPoint(byte *img, ROI Size, int Stride, byte val, POINT *point)
-{
-	int x, y;
-	bool found = false;
-
-	// Search white pixel part of
-	for (x = 0; x < Size.height; x++) {
-		for (y = 0; y < Size.width; y++) {
-			byte pixel = img[x*Stride + y];
-			if (pixel >= val) {
-				point->x = x;
-				point->y = y;
-				found = true;
-				break;
-			}
-		}
-	}
-	return found;
-}
-
-bool isImageBlank(byte *img, ROI Size, int Stride)
-{
-	int x, y;
-	bool blank = true;
-
-	// Search white pixel part of
-	for (x = 0; x < Size.height; x++) {
-		for (y = 0; y < Size.width; y++) {
-			byte pixel = img[x*Stride + y];
-			if (pixel > 0) {
-				blank = false;
-				break;
-			}
-		}
-	}
-	return blank;
-}
-
-float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
-{
-	int n = 10;
-	POINT point;
-	int ImgResStride;
-	size_t ImgDevStride;
-	byte *ImgDevXk1;
-	byte *ImgDevXk;
-    byte *ImgDevA;
-    byte *ImgDevTmp;
-    byte *ImgDevXres;
-
-    printf("LabelObjects\n");
-
-    // Create result image on host
-    byte *ImgTmp = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
-    byte *ImgXres = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
-    ImgResStride /= sizeof(byte);
-    printf("ImgResStride %d\n", ImgResStride);
-
-    cutilSafeCall(cudaMemcpy2D(ImgXres, ImgResStride * sizeof(byte),
-    						   bw, Stride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToHost) );
-
-    // Create image A on device
-    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevA), &ImgDevStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMemcpy2D(ImgDevA, ImgDevStride * sizeof(byte),
-    						   bw, Stride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-
-    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXk1), &ImgDevStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXk), &ImgDevStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevTmp), &ImgDevStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXres), &ImgDevStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMemcpy2D(ImgDevXres, ImgDevStride * sizeof(byte),
-    						   bw, Stride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-    ImgDevStride /= sizeof(byte);
-    printf("ImgDevStride %d\n", ImgDevStride);
-
-    //setup execution parameters
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
-
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    // start CUDA timer
-    RestartTimer(timerCUDA);
-
-	// Select picture with one white pixel not yet found
-    while (findPoint(ImgXres, Size, Stride, 255, &point))
-    {
-
-    	// Create picture with one white pixel
-    	cutilSafeCall(cudaMemset2D(ImgDevXk1, ImgDevStride, 0, Size.width, Size.height)); //OK
-    	setImageByte<<< grid, threads >>>(ImgDevXk1, ImgDevStride, point.x, point.y, 255); //OK
-
-    	while (true)
-    	{
-    		// Dilate image anded with original
-    		// Xk = imdilate(Xk_1, B) & A
-    		dilateOriginalImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
-
-    		// Compare if image are equal DiffBWImg(Xk, Xk_1) == 1 - reduced version kbe???
-    		diffImageReduced<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
-    		// Copy difference of images
-    	    cutilSafeCall(cudaMemcpy2D(ImgTmp, ImgResStride * sizeof(byte),
-    	    						   ImgDevTmp, ImgDevStride * sizeof(byte),
-    	                               Size.width * sizeof(byte), Size.height,
-    	                               cudaMemcpyDeviceToHost) );
-
-    	    if (isImageBlank(ImgTmp, Size, Stride))
-    	    {
-    	    	printf("Object %d found\n", n);
-         	    // Images are equal
-    	    	// h = find(Xk == 1); Xres(h) = n;
-    	    	lableImageObject<<< grid, threads >>>(ImgDevXres, ImgDevXk, ImgDevStride, n);
-    	    	n = n + 10;
-    	    	break;
-    	    }
-
-  		    // Xk_1 = Xk
-			cutilSafeCall(cudaMemcpy2D(ImgDevXk1, ImgDevStride * sizeof(byte),
-									   ImgDevXk, ImgDevStride * sizeof(byte),
-									   Size.width * sizeof(byte), Size.height,
-									   cudaMemcpyDeviceToDevice) );
-    	}
-
-		// Copy result to host
-	    cutilSafeCall(cudaMemcpy2D(ImgXres, ImgResStride * sizeof(byte),
-	    						   ImgDevXres, ImgDevStride * sizeof(byte),
-	                               Size.width * sizeof(byte), Size.height,
-	                               cudaMemcpyDeviceToHost) );
-
-    }
-
-    StopTimer(timerCUDA);
-
-    cutilCheckMsg("Kernel execution failed");
-
-    cutilSafeCall(cudaMemcpy2D(dst, Stride * sizeof(byte),
-    						   ImgXres, ImgResStride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToHost) );
-
-    cutilSafeCall(cudaFree(ImgDevA));
-    cutilSafeCall(cudaFree(ImgDevXk1));
-    cutilSafeCall(cudaFree(ImgDevXk));
-    cutilSafeCall(cudaFree(ImgDevTmp));
-    cutilSafeCall(cudaFree(ImgDevXres));
-	FreePlane(ImgTmp);
-	FreePlane(ImgXres);
-
-	// Find first
-	return GetTimer(timerCUDA);
-}
-
-// Performs thresholding and morphological operations like dilation and erode of image
-float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
-{    
-    byte *Src, *DstBW, *Dst1, *Dst2;
-    size_t DstStride, SrcStride;
-
-    // Allocation of memory for 2D source image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(byte), Size.height));
-    SrcStride /= sizeof(byte);
-    printf("SrcStride %d\n", SrcStride);
-
-    //copy source image from host memory to device
-    cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(byte),
-                               ImgSrc, Stride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-    // Allocation of device memory for 2D destination image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst1), &DstStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst2), &DstStride, Size.width * sizeof(byte), Size.height));
-    DstStride /= sizeof(byte);
-    printf("DstStride %d\n", DstStride);
-    
-    //setup execution parameters
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
-
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    // start CUDA timer
-    RestartTimer(timerCUDA);
-    
-    // Generate BW image
-    tresholdImageByte<<< grid, threads >>>(DstBW, Src, DstStride, 15);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    // Erode image with structuring element
-    erodeImageByte<<< grid, threads >>>(Dst1, DstBW, DstStride);
-    // Dilate image with structuring element
-    dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
-    
-    StopTimer(timerCUDA);
-
-    cutilCheckMsg("Kernel execution failed");
-
-    //copy eroded image from device memory to host memory in Src
-    cutilSafeCall(cudaMemcpy2D(ImgDst, Stride * sizeof(byte),
-                                Dst2, DstStride * sizeof(byte),
-                                Size.width * sizeof(byte), Size.height,
-                                cudaMemcpyDeviceToHost) );
-                                   
-    //clean up memory
-    cutilSafeCall(cudaFree(Src));
-    cutilSafeCall(cudaFree(DstBW));
-    cutilSafeCall(cudaFree(Dst1));
-    cutilSafeCall(cudaFree(Dst2));
-
-    //return time taken by the operation
-    return GetTimer(timerCUDA);
-}
-
-// Performs thresholding and morphological operations like dilation and erode of image
-float MorphObjectsFloat(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
-{
-    float *Dst, *DstBW, *Src, *Diff;
-    size_t DstStride, SrcStride, DiffStride;
-
-    //convert source image to float representation
-    int ImgSrcFStride;
-    float *ImgSrcF = MallocPlaneFloat(Size.width, Size.height, &ImgSrcFStride);
-    CopyByte2Float(ImgSrc, Stride, ImgSrcF, ImgSrcFStride, Size);
-
-    // Allocation of memory for 2D source image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(float), Size.height));
-    SrcStride /= sizeof(float);
-    printf("SrcStride %d\n", SrcStride);
-
-    //copy source image from host memory to device
-    cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(float),
-                               ImgSrcF, ImgSrcFStride * sizeof(float),
-                               Size.width * sizeof(float), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-    // Allocation of device memory for 2D destination image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, Size.width * sizeof(float), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst), &DstStride, Size.width * sizeof(float), Size.height));
-    DstStride /= sizeof(float);
-
-    cutilSafeCall(cudaMallocPitch((void **)(&Diff), &DiffStride, Size.width * sizeof(float), Size.height));
-    DiffStride /= sizeof(float);
-
-    //setup execution parameters
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
-
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    //create and start CUDA timer
-    RestartTimer(timerCUDA);
-
-    //copy image from device memory to device memory
-    /*
-    cutilSafeCall(cudaMemcpy2D(Dst, DstStride * sizeof(float),
-                                Src, SrcStride * sizeof(float),
-                                Size.width * sizeof(float), Size.height,
-                                cudaMemcpyDeviceToDevice) );
-
-    copyImage<<< grid, threads >>>(Dst, Src, Size.width);
-    */
-
-    // Generate BW image
-    //tresholdImage<<< grid, threads >>>(DstBW, Src, Size.width, 110);
-    tresholdImage<<< grid, threads >>>(DstBW, Src, DstStride, 15);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    // Erode image with structuring element
-    erodeImage<<< grid, threads >>>(Dst, DstBW, DstStride);
-    // Dilate image with structuring element
-    dilateImage<<< grid, threads >>>(Diff, Dst, DstStride);
-    //dilateImage<<< grid, threads >>>(Diff, DstBW, DstStride);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    // Diff BW and eroded image
-    //diffImage<<< grid, threads >>>(Diff, DstBW, Dst, Size.width);
-    //cutilSafeCall(cudaThreadSynchronize());
-
-    StopTimer(timerCUDA);
-    float time = GetTimer(timerCUDA);
-
-    cutilCheckMsg("Kernel execution failed");
-
-    //copy eroded image from device memory to host memory in Src
-    cutilSafeCall(cudaMemcpy2D(ImgSrcF, ImgSrcFStride * sizeof(float),
-                                Diff, DiffStride * sizeof(float),
-                                Size.width * sizeof(float), Size.height,
-                                cudaMemcpyDeviceToHost) );
-
-    CopyFloat2Byte(ImgSrcF, ImgSrcFStride, ImgDst, Stride, Size);
-
-    //clean up memory
-    cutilSafeCall(cudaFree(Src));
-    cutilSafeCall(cudaFree(Dst));
-    cutilSafeCall(cudaFree(DstBW));
-    cutilSafeCall(cudaFree(Diff));
-    FreePlane(ImgSrcF);
-
-    //return time taken by the operation
-    return time;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
@@ -699,23 +64,22 @@ main( int argc, char** argv)
     float TimeCUDA;
     char ImageName[50];
 
-    printf("[imageCount]\n");
-
     //char ImageFname[] = "rice.bmp";
     char ImageFname[] = "data/E45nord%d.bmp";
-    char EdgeImageFname[] = "nordEdge.bmp";
+    char BackImageFname[] = "nordBackground.bmp";
     char ImageBackFname[] = "nordBack.bmp";
-    char TestImageFname[] = "nordTest%d.bmp";
+    char TestImageFname[] = "nordResult%d.bmp";
 
-    cudaDeviceProp deviceProps;
+    printf("Program counting objects in series of images\n");
+    printf("--------------------------------------------------\n");
 
 	if( cutCheckCmdLineFlag(argc, (const char**)argv, "device") ) {
 	    devID = cutilDeviceInit(argc, argv);
-            if (devID < 0) {
-               printf("exiting...\n");
-               cutilExit(argc, argv);
-               exit(0);
-            }
+		if (devID < 0) {
+		   printf("exiting...\n");
+		   cutilExit(argc, argv);
+		   exit(0);
+		}
 	}
 	else {
 	    devID = cutGetMaxGflopsDeviceId();
@@ -723,11 +87,9 @@ main( int argc, char** argv)
 	}
 		
     // get number of SMs on this GPU
-    cutilSafeCall(cudaGetDeviceProperties(&deviceProps, devID));
-    printf("CUDA device [%s] has %d Multi-Processors\n", deviceProps.name, deviceProps.multiProcessorCount);
+    PrintDeviceProperties();
 
     // Initialize timer
-	CreateTimer(&timerCUDA);
 	CreateTimer(&timerTotalCUDA);
 	StartTimer(timerTotalCUDA);
 
@@ -741,18 +103,16 @@ main( int argc, char** argv)
     
     ImgDst = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDstStride);
 
-    // Test image - Rice black/white image
-    //printf("Image 0[0,%d], 10[0,%d], 11[255,%d], 22[255,%d], 23[0,%d], 256[0,%d]\n",
-    //        ImgSrc[256], ImgSrc[256*9], ImgSrc[256*10], ImgSrc[256*21], ImgSrc[256*22], ImgSrc[256*255]);
+    //printf("Image src stride %d\n", ImgSrcStride);
 
-    printf("Image src stride %d\n", ImgSrcStride);
-    TimeCUDA = ImageBackground(ImgSrc, ImgDst, ImgSize, ImgSrcStride, depth);
-    //TimeCUDA = ImageBackgroundDiff(ImgSrc, ImgDst, ImgSize, ImgSrcStride, depth);
-    printf("Processing time (Background)    : %f ms \n", TimeCUDA);
+    TimeCUDA = ImageBackground(ImgDst, ImgSrc, ImgSize, ImgSrcStride, depth);
+    printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
     
-    //dump result of Gold 1 processing
-    printf("Success\nDumping result to %s...\n", EdgeImageFname);
-    DumpBmpAsGray(EdgeImageFname, ImgDst, ImgDstStride, ImgSize);
+    //Dump result of finding background image
+    printf("Dumping background image to %s...\n", BackImageFname);
+    DumpBmpAsGray(BackImageFname, ImgDst, ImgDstStride, ImgSize);
+
+    printf("--------------------------------------------------\n");
 
     //------------------------------------------------------------------------------------------
     // Testing of diff background with images
@@ -764,36 +124,38 @@ main( int argc, char** argv)
         return 1;
     }
 
-    // Allocate BW image - result after thresholding and dilation
+    // Allocate BW image
     ImgBW = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBWStride);
+
+    printf("--------------------------------------------------\n");
+    printf("Locating and label of objects based on %s...\n", ImageBackFname);
 
     ImgCur = ImgSrc;
     for (int i = 1; i <= depth; i++)
     {
-		TimeCUDA = ImageDiff(ImgBack, ImgCur, ImgDst, ImgSize, ImgSrcStride, ImgBackStride);
-		//TimeCUDA = ThrustImageDiff(ImgBack, ImgCur, ImgDst, ImgSize, ImgSrcStride, ImgBackStride);
-		printf("Processing time (Difference)    : %f ms \n", TimeCUDA);
+		TimeCUDA = DiffImages(ImgDst, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
+		//TimeCUDA = ThrustImageDiff(ImgDst, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
+		printf("Processing time (DiffImages)      : %f ms \n", TimeCUDA);
 		ImgCur = NextImage(ImgCur, ImgSrcStride, ImgSize);
 
-		TimeCUDA = MorphObjects(ImgDst, ImgBW, ImgSize, ImgBWStride);
-	    printf("Processing time (Morph)    : %f ms \n", TimeCUDA);
+		TimeCUDA = MorphObjects(ImgBW, ImgDst, ImgSize, ImgBWStride);
+	    printf("Processing time (MorphObjects)    : %f ms \n", TimeCUDA);
 
-	    TimeCUDA = LabelObjects(ImgBW, ImgDst, ImgSize, ImgDstStride);
-	    printf("Processing time (Label)    : %f ms \n", TimeCUDA);
+	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride);
+	    printf("Processing time (LabelObjects)    : %f ms \n", TimeCUDA);
 
 		sprintf(ImageName, TestImageFname, i);
-		printf("Success\nDumping result to %s...\n", ImageName);
+		printf("Dumping BW image to %s...\n", ImageName);
 		DumpBmpAsGray(ImageName, ImgBW, ImgBWStride, ImgSize);
 
 		sprintf(ImageName, TestImageFname, i+10);
-		printf("Success\nDumping result to %s...\n", ImageName);
+		printf("Dumping Label image to %s...\n", ImageName);
 		DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
     }
 
     StopTimer(timerTotalCUDA);
     float time = GetTimer(timerTotalCUDA);
     printf("Processing time (Total)    : %f ms \n", time);
-
 
     //release byte planes
     FreePlane(ImgSrc);

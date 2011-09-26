@@ -36,10 +36,16 @@
 # Add source files here
 EXECUTABLE	:= imageCount
 # Cuda source files (compiled with cudacc)
-CUFILES		:= imageCount.cu
-CUDEPS		:= image_kernel.cu
+CUFILES		:= imageCount.cu 
+CUFILES     += imageBackground.cu
+CUFILES     += labelObjects.cu
+CUFILES     += locateObjects.cu
+CUFILES		+= imageThrust.cu
+CUFILES		+= deviceUtil.cu
+
 # C/C++ source files (compiled with gcc / c++)
-CCFILES		:= BmpUtil.cpp
+CCFILES     := imageLoader.cpp 
+CCFILES		+= BmpUtil.cpp
 
 
 ################################################################################
