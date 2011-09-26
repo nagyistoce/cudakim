@@ -18,6 +18,8 @@
 * this software and related documentation outside the terms of the EULA
 * is strictly prohibited.
 *
+*  Modified on: 26/09/2011
+*           by: kim bjerge
 */
 
 /**
@@ -28,6 +30,9 @@
 * This file contains declaration of basic bitmap loading, saving, 
 * conversions to different representations and memory management routines.
 */
+
+#ifndef BMPUTIL_H_
+#define BMPUTIL_H_
 
 #pragma once
 
@@ -43,12 +48,6 @@ typedef int                             int32;
 typedef unsigned char                   uint8;
 typedef unsigned short                  uint16;
 typedef unsigned int                    uint32;
-
-typedef struct
-{
-	int x;			//!< x position
-	int y;			//!< y position
-} POINT;
 
 /**
 * \brief Bitmap file header structure
@@ -91,25 +90,6 @@ typedef struct
     #pragma pack()
 #endif
 
-
-/**
-* \brief Simple 2D size / region_of_interest structure
-*
-*  Simple 2D size / region_of_interest structure
-*/
-typedef struct  
-{
-	int width;			//!< ROI width
-	int height;			//!< ROI height
-} ROI;
-
-
-/**
-*  One-byte unsigned integer type
-*/
-typedef unsigned char byte;
-
-
 extern "C" 
 {
 	int clamp_0_255(int x);
@@ -131,3 +111,6 @@ extern "C"
 	float CalculateMSE(byte *Img1, byte *Img2, int Stride, ROI Size);
 	float CalculatePSNR(byte *Img1, byte *Img2, int Stride, ROI Size);
 }
+
+#endif
+

@@ -7,7 +7,7 @@
 
 #include <cutil_inline.h>
 
-#define WINDOW 100
+#define WINDOW 8
 static float timerAverage[WINDOW];
 static unsigned int idx;
 

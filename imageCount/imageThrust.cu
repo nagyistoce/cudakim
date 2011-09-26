@@ -49,6 +49,7 @@
 #include <iterator>
 
 // includes, timer utilities
+#include "defs.h"
 #include "BmpUtil.h"
 //#include "timer.h"
 
@@ -65,12 +66,14 @@ struct func_diff_byte
 
 // Performs thresholding and morphological operations like dilation and erode of image
 // COULD BE OPTIMIZED! kbe???
-float ThrustImageDiff(byte *ImgBack, byte *ImgSrc, byte *ImgDst, ROI Size, int ISStride, int IBStride)
+float ThrustImageDiff(byte *ImgDst, byte *ImgBack, byte *ImgSrc, ROI Size, int ISStride, int IBStride)
 {
     cudaEvent_t start;
     cudaEvent_t end;
     float elapsed_time;
     int idx, ImgSize = ISStride*Size.height*sizeof(byte);
+
+    printf("[ThrustImageDiff]\n");
 
     cudaEventCreate(&start);
     cudaEventCreate(&end);

@@ -18,6 +18,8 @@
 * this software and related documentation outside the terms of the EULA
 * is strictly prohibited.
 *
+*  Modified on: 26/09/2011
+*           by: kim bjerge
 */
 
 /**
@@ -34,6 +36,7 @@
 #include <math.h>
 #include <cutil_inline.h>
 
+#include "defs.h"
 #include "BmpUtil.h"
 
 
@@ -87,11 +90,7 @@ byte *MallocPlaneByte(int width, int height, int *pStepBytes)
 {
 	byte *ptr;
 	*pStepBytes = ((int)ceil(width/16.0f))*16;
-//#ifdef __ALLOW_ALIGNED_MEMORY_MANAGEMENT
-//	ptr = (byte *)_aligned_malloc(*pStepBytes * height, 16);
-//#else
 	ptr = (byte *)malloc(*pStepBytes * height);
-//#endif
 	return ptr;
 }
 
@@ -110,11 +109,7 @@ byte *MallocCubeByte(int width, int height, int depth, int *pStepBytes)
 {
 	byte *ptr;
 	*pStepBytes = ((int)ceil(width/16.0f))*16;
-//#ifdef __ALLOW_ALIGNED_MEMORY_MANAGEMENT
-//	ptr = (byte *)_aligned_malloc(*pStepBytes * height, 16);
-//#else
 	ptr = (byte *)malloc(*pStepBytes * height * depth);
-//#endif
 	return ptr;
 }
 
@@ -132,11 +127,7 @@ short *MallocPlaneShort(int width, int height, int *pStepBytes)
 {
 	short *ptr;
 	*pStepBytes = ((int)ceil((width*sizeof(short))/16.0f))*16;
-	//#ifdef __ALLOW_ALIGNED_MEMORY_MANAGEMENT
-	//	ptr = (float *)_aligned_malloc(*pStepBytes * height, 16);
-	//#else
 	ptr = (short *)malloc(*pStepBytes * height);
-	//#endif
 	*pStepBytes = *pStepBytes / sizeof(short);
 	return ptr;
 }
@@ -156,11 +147,7 @@ float *MallocPlaneFloat(int width, int height, int *pStepBytes)
 {
 	float *ptr;
 	*pStepBytes = ((int)ceil((width*sizeof(float))/16.0f))*16;
-//#ifdef __ALLOW_ALIGNED_MEMORY_MANAGEMENT
-//	ptr = (float *)_aligned_malloc(*pStepBytes * height, 16);
-//#else
 	ptr = (float *)malloc(*pStepBytes * height);
-//#endif
 	*pStepBytes = *pStepBytes / sizeof(float);
 	return ptr;
 }
@@ -224,17 +211,10 @@ void CopyFloat2Byte(float *ImgSrc, int StrideF, byte *ImgDst, int StrideB, ROI S
 */
 void FreePlane(void *ptr)
 {
-//#ifdef __ALLOW_ALIGNED_MEMORY_MANAGEMENT
-//	if (ptr) 
-//	{
-//		_aligned_free(ptr);
-//	}
-//#else
 	if (ptr) 
 	{
 		free(ptr);
 	}
-//#endif
 }
 
 
