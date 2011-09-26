@@ -44,6 +44,12 @@ typedef unsigned char                   uint8;
 typedef unsigned short                  uint16;
 typedef unsigned int                    uint32;
 
+typedef struct
+{
+	int x;			//!< x position
+	int y;			//!< y position
+} POINT;
+
 /**
 * \brief Bitmap file header structure
 *

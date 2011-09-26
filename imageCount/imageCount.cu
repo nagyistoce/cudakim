@@ -371,13 +371,6 @@ end;
 end;
 */
 
-typedef struct
-{
-	int x;			//!< ROI width
-	int y;			//!< ROI height
-} POINT;
-
-
 bool findPoint(byte *img, ROI Size, int Stride, byte val, POINT *point)
 {
 	int x, y;
@@ -398,37 +391,140 @@ bool findPoint(byte *img, ROI Size, int Stride, byte val, POINT *point)
 	return found;
 }
 
-float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, dim3 grid, dim3 threads)
+bool isImageBlank(byte *img, ROI Size, int Stride)
+{
+	int x, y;
+	bool blank = true;
+
+	// Search white pixel part of
+	for (x = 0; x < Size.height; x++) {
+		for (y = 0; y < Size.width; y++) {
+			byte pixel = img[x*Stride + y];
+			if (pixel > 0) {
+				blank = false;
+				break;
+			}
+		}
+	}
+	return blank;
+}
+
+float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
 {
 	int k = 1, n = 2;
 	POINT point;
 	int ImgResStride;
+	size_t ImgDevStride;
+	byte *ImgDevXk1;
+	byte *ImgDevXk;
+    byte *ImgDevA;
+    byte *ImgDevTmp;
+    byte *ImgDevXres;
 
-    byte *ImgA = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
+    printf("LabelObjects\n");
+
+    // Create result image on host
+    byte *ImgTmp = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
     byte *ImgXres = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
-    byte *ImgXk1 = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
-
-    cutilSafeCall(cudaMemcpy2D(ImgA, ImgResStride * sizeof(byte),
-    						   bw, Stride * sizeof(byte),
-                               Size.width * sizeof(byte), Size.height,
-                               cudaMemcpyHostToHost) );
+    ImgResStride /= sizeof(byte);
+    printf("ImgResStride %d\n", ImgResStride);
 
     cutilSafeCall(cudaMemcpy2D(ImgXres, ImgResStride * sizeof(byte),
     						   bw, Stride * sizeof(byte),
                                Size.width * sizeof(byte), Size.height,
                                cudaMemcpyHostToHost) );
 
-    while (true)
+    // Create image A on device
+    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevA), &ImgDevStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMemcpy2D(ImgDevA, ImgDevStride * sizeof(byte),
+    						   bw, Stride * sizeof(byte),
+                               Size.width * sizeof(byte), Size.height,
+                               cudaMemcpyHostToDevice) );
+
+
+    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXk1), &ImgDevStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXk), &ImgDevStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevTmp), &ImgDevStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXres), &ImgDevStride, Size.width * sizeof(byte), Size.height));
+    ImgDevStride /= sizeof(byte);
+    printf("ImgDevStride %d\n", ImgDevStride);
+
+    //setup execution parameters
+    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
+
+    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+
+    // start CUDA timer
+    RestartTimer(timerCUDA);
+
+	// Select picture with one white pixel not yet found
+    while (findPoint(ImgXres, Size, Stride, 255, &point))
     {
-    	if (!findPoint(ImgXres, Size, Stride, 255, &point))
-    		break;
+
+    	// Create picture with one white pixel
+    	cutilSafeCall(cudaMemset2D(ImgDevXk1, ImgDevStride, 0, Size.width, Size.height));
+    	setImageByte<<< grid, threads >>>(ImgDevXk1, ImgDevStride, point.x, point.y, 255);
+
+    	while (true)
+    	{
+    		// Dilate image anded with original
+    		// Xk = imdilate(Xk_1, B) & A
+    		dilateOriginalImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
+
+    		// Compare if image are equal DiffBWImg(Xk, Xk_1) == 1
+    		diffImageReduced<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
+    		// Copy difference of images
+    	    cutilSafeCall(cudaMemcpy2D(ImgTmp, ImgResStride * sizeof(byte),
+    	    						   ImgDevTmp, ImgDevStride * sizeof(byte),
+    	                               Size.width * sizeof(byte), Size.height,
+    	                               cudaMemcpyDeviceToHost) );
+
+    	    if (isImageBlank(ImgTmp, Size, Stride))
+    	    {
+            	// Images are equal
+    	    	// h = find(Xk == 1); Xres(h) = n;
+    	    	lableImageObject<<< grid, threads >>>(ImgDevXres, ImgDevXk, ImgDevStride, n);
+    	    	n = n + 10;
+    	    	break;
+    	    }
+
+    	    k = k + 1;
+			// Xk_1 = Xk
+			cutilSafeCall(cudaMemcpy2D(ImgDevXk1, ImgDevStride * sizeof(byte),
+									   ImgDevXk, ImgDevStride * sizeof(byte),
+									   Size.width * sizeof(byte), Size.height,
+									   cudaMemcpyDeviceToDevice) );
+    	}
+
+		// Copy result to host
+	    cutilSafeCall(cudaMemcpy2D(ImgXres, ImgResStride * sizeof(byte),
+	    						   ImgDevXres, ImgDevStride * sizeof(byte),
+	                               Size.width * sizeof(byte), Size.height,
+	                               cudaMemcpyDeviceToHost) );
+
     }
 
+    StopTimer(timerCUDA);
+
+    cutilCheckMsg("Kernel execution failed");
+
+    cutilSafeCall(cudaMemcpy2D(dst, Stride * sizeof(byte),
+    						   ImgXres, ImgResStride * sizeof(byte),
+                               Size.width * sizeof(byte), Size.height,
+                               cudaMemcpyHostToHost) );
+
+    cutilSafeCall(cudaFree(ImgDevA));
+    cutilSafeCall(cudaFree(ImgDevXk1));
+    cutilSafeCall(cudaFree(ImgDevXk));
+    cutilSafeCall(cudaFree(ImgDevTmp));
+    cutilSafeCall(cudaFree(ImgDevXres));
+	FreePlane(ImgTmp);
 	FreePlane(ImgXres);
-	FreePlane(ImgA);
 
 	// Find first
-	return 0;
+	return GetTimer(timerCUDA);
 }
 
 // Performs thresholding and morphological operations like dilation and erode of image
@@ -462,7 +558,7 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
     printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
-    //create and start CUDA timer
+    // start CUDA timer
     RestartTimer(timerCUDA);
     
     // Generate BW image
@@ -474,9 +570,6 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     // Dilate image with structuring element
     dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
     
-    //
-    //LabelObjects(Dst1, Dst2, Size, DstStride, grid, threads);
-
     StopTimer(timerCUDA);
 
     cutilCheckMsg("Kernel execution failed");
@@ -680,10 +773,16 @@ main( int argc, char** argv)
 		TimeCUDA = MorphObjects(ImgDst, ImgBW, ImgSize, ImgBWStride);
 	    printf("Processing time (Morph)    : %f ms \n", TimeCUDA);
 
+	    TimeCUDA = LabelObjects(ImgBW, ImgDst, ImgSize, ImgDstStride);
+	    printf("Processing time (Label)    : %f ms \n", TimeCUDA);
+
 		sprintf(ImageName, TestImageFname, i);
 		printf("Success\nDumping result to %s...\n", ImageName);
-		//DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
 		DumpBmpAsGray(ImageName, ImgBW, ImgBWStride, ImgSize);
+
+		sprintf(ImageName, TestImageFname, i+10);
+		printf("Success\nDumping result to %s...\n", ImageName);
+		DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
     }
 
     StopTimer(timerTotalCUDA);
