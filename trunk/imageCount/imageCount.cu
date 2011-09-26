@@ -411,7 +411,7 @@ bool isImageBlank(byte *img, ROI Size, int Stride)
 
 float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
 {
-	int k = 1, n = 2;
+	int n = 10;
 	POINT point;
 	int ImgResStride;
 	size_t ImgDevStride;
@@ -446,6 +446,11 @@ float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
     cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXk), &ImgDevStride, Size.width * sizeof(byte), Size.height));
     cutilSafeCall(cudaMallocPitch((void **)(&ImgDevTmp), &ImgDevStride, Size.width * sizeof(byte), Size.height));
     cutilSafeCall(cudaMallocPitch((void **)(&ImgDevXres), &ImgDevStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMemcpy2D(ImgDevXres, ImgDevStride * sizeof(byte),
+    						   bw, Stride * sizeof(byte),
+                               Size.width * sizeof(byte), Size.height,
+                               cudaMemcpyHostToDevice) );
+
     ImgDevStride /= sizeof(byte);
     printf("ImgDevStride %d\n", ImgDevStride);
 
@@ -464,8 +469,8 @@ float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
     {
 
     	// Create picture with one white pixel
-    	cutilSafeCall(cudaMemset2D(ImgDevXk1, ImgDevStride, 0, Size.width, Size.height));
-    	setImageByte<<< grid, threads >>>(ImgDevXk1, ImgDevStride, point.x, point.y, 255);
+    	cutilSafeCall(cudaMemset2D(ImgDevXk1, ImgDevStride, 0, Size.width, Size.height)); //OK
+    	setImageByte<<< grid, threads >>>(ImgDevXk1, ImgDevStride, point.x, point.y, 255); //OK
 
     	while (true)
     	{
@@ -473,7 +478,7 @@ float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
     		// Xk = imdilate(Xk_1, B) & A
     		dilateOriginalImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
 
-    		// Compare if image are equal DiffBWImg(Xk, Xk_1) == 1
+    		// Compare if image are equal DiffBWImg(Xk, Xk_1) == 1 - reduced version kbe???
     		diffImageReduced<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
     		// Copy difference of images
     	    cutilSafeCall(cudaMemcpy2D(ImgTmp, ImgResStride * sizeof(byte),
@@ -483,15 +488,15 @@ float LabelObjects(byte *bw, byte *dst, ROI Size, int Stride)
 
     	    if (isImageBlank(ImgTmp, Size, Stride))
     	    {
-            	// Images are equal
+    	    	printf("Object %d found\n", n);
+         	    // Images are equal
     	    	// h = find(Xk == 1); Xres(h) = n;
     	    	lableImageObject<<< grid, threads >>>(ImgDevXres, ImgDevXk, ImgDevStride, n);
     	    	n = n + 10;
     	    	break;
     	    }
 
-    	    k = k + 1;
-			// Xk_1 = Xk
+  		    // Xk_1 = Xk
 			cutilSafeCall(cudaMemcpy2D(ImgDevXk1, ImgDevStride * sizeof(byte),
 									   ImgDevXk, ImgDevStride * sizeof(byte),
 									   Size.width * sizeof(byte), Size.height,
