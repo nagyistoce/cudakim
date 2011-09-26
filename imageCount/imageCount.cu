@@ -169,6 +169,8 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
     return 0;
 }
 
+// NOT YET COMPLETED ! - kbe???
+/*
 float ImageBackgroundDiff(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int depth)
 {
     byte *Dst;
@@ -217,6 +219,7 @@ float ImageBackgroundDiff(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int 
 
     return time;
 }
+*/
 
 // Find background image based on 3D cube of images
 float ImageBackground(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride, int depth)
@@ -367,23 +370,109 @@ end;
 
 end;
 */
-float LabelObjects(float *bw, float *dst, int stride, dim3 grid, dim3 threads)
+
+float LabelObjects(byte *dst, byte *bw, ROI Size, int stride, dim3 grid, dim3 threads)
 {
-	int k = 1, n = 2;
+	int x, y, k = 1, n = 2;
+	bool found = false;
+	int ImgResStride;
+
+    byte *ImgRes = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
+
+	// Search white pixel part of
+	for (x = 0; x < Size.height; x++) {
+		for (y = 0; y < Size.width; y++) {
+			byte pixel = bw[x*stride + y];
+			if (pixel >= 255.0f) {
+				found = true;
+				break;
+			}
+		}
+	}
+
+	FreePlane(ImgRes);
+
+	// Find first
 	return 0;
 }
 
 // Performs thresholding and morphological operations like dilation and erode of image
 float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
 {    
+    byte *Src, *DstBW, *Dst1, *Dst2;
+    size_t DstStride, SrcStride;
+
+    // Allocation of memory for 2D source image in single precision format
+    cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(byte), Size.height));
+    SrcStride /= sizeof(byte);
+    printf("SrcStride %d\n", SrcStride);
+
+    //copy source image from host memory to device
+    cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(byte),
+                               ImgSrc, Stride * sizeof(byte),
+                               Size.width * sizeof(byte), Size.height,
+                               cudaMemcpyHostToDevice) );
+
+    // Allocation of device memory for 2D destination image in single precision format
+    cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&Dst1), &DstStride, Size.width * sizeof(byte), Size.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&Dst2), &DstStride, Size.width * sizeof(byte), Size.height));
+    DstStride /= sizeof(byte);
+    printf("DstStride %d\n", DstStride);
+    
+    //setup execution parameters
+    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
+
+    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+
+    //create and start CUDA timer
+    RestartTimer(timerCUDA);
+    
+    // Generate BW image
+    tresholdImageByte<<< grid, threads >>>(DstBW, Src, DstStride, 15);
+    cutilSafeCall(cudaThreadSynchronize());
+
+    // Erode image with structuring element
+    erodeImageByte<<< grid, threads >>>(Dst1, DstBW, DstStride);
+    // Dilate image with structuring element
+    dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
+    
+    //
+    //LabelObjects(Dst1, Dst2, Size, DstStride, grid, threads);
+
+    StopTimer(timerCUDA);
+
+    cutilCheckMsg("Kernel execution failed");
+
+    //copy eroded image from device memory to host memory in Src
+    cutilSafeCall(cudaMemcpy2D(ImgDst, Stride * sizeof(byte),
+                                Dst2, DstStride * sizeof(byte),
+                                Size.width * sizeof(byte), Size.height,
+                                cudaMemcpyDeviceToHost) );
+                                   
+    //clean up memory
+    cutilSafeCall(cudaFree(Src));
+    cutilSafeCall(cudaFree(DstBW));
+    cutilSafeCall(cudaFree(Dst1));
+    cutilSafeCall(cudaFree(Dst2));
+
+    //return time taken by the operation
+    return GetTimer(timerCUDA);
+}
+
+// Performs thresholding and morphological operations like dilation and erode of image
+float MorphObjectsFloat(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
+{
     float *Dst, *DstBW, *Src, *Diff;
     size_t DstStride, SrcStride, DiffStride;
-    
+
     //convert source image to float representation
     int ImgSrcFStride;
     float *ImgSrcF = MallocPlaneFloat(Size.width, Size.height, &ImgSrcFStride);
     CopyByte2Float(ImgSrc, Stride, ImgSrcF, ImgSrcFStride, Size);
-    
+
     // Allocation of memory for 2D source image in single precision format
     cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(float), Size.height));
     SrcStride /= sizeof(float);
@@ -391,7 +480,7 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
 
     //copy source image from host memory to device
     cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(float),
-                               ImgSrcF, ImgSrcFStride * sizeof(float), 
+                               ImgSrcF, ImgSrcFStride * sizeof(float),
                                Size.width * sizeof(float), Size.height,
                                cudaMemcpyHostToDevice) );
 
@@ -399,7 +488,7 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, Size.width * sizeof(float), Size.height));
     cutilSafeCall(cudaMallocPitch((void **)(&Dst), &DstStride, Size.width * sizeof(float), Size.height));
     DstStride /= sizeof(float);
-    
+
     cutilSafeCall(cudaMallocPitch((void **)(&Diff), &DiffStride, Size.width * sizeof(float), Size.height));
     DiffStride /= sizeof(float);
 
@@ -412,20 +501,20 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
 
     //create and start CUDA timer
     RestartTimer(timerCUDA);
-    
+
     //copy image from device memory to device memory
     /*
-    cutilSafeCall(cudaMemcpy2D(Dst, DstStride * sizeof(float),  
-                                Src, SrcStride * sizeof(float), 
+    cutilSafeCall(cudaMemcpy2D(Dst, DstStride * sizeof(float),
+                                Src, SrcStride * sizeof(float),
                                 Size.width * sizeof(float), Size.height,
                                 cudaMemcpyDeviceToDevice) );
-    
+
     copyImage<<< grid, threads >>>(Dst, Src, Size.width);
     */
 
     // Generate BW image
     //tresholdImage<<< grid, threads >>>(DstBW, Src, Size.width, 110);
-    tresholdImage<<< grid, threads >>>(DstBW, Src, DstStride, 40);
+    tresholdImage<<< grid, threads >>>(DstBW, Src, DstStride, 15);
     cutilSafeCall(cudaThreadSynchronize());
 
     // Erode image with structuring element
@@ -434,9 +523,6 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     dilateImage<<< grid, threads >>>(Diff, Dst, DstStride);
     //dilateImage<<< grid, threads >>>(Diff, DstBW, DstStride);
     cutilSafeCall(cudaThreadSynchronize());
-    
-    //
-    LabelObjects(Diff, Dst, DstStride, grid, threads);
 
     // Diff BW and eroded image
     //diffImage<<< grid, threads >>>(Diff, DstBW, Dst, Size.width);
@@ -448,11 +534,11 @@ float MorphObjects(byte *ImgSrc, byte *ImgDst, ROI Size, int Stride)
     cutilCheckMsg("Kernel execution failed");
 
     //copy eroded image from device memory to host memory in Src
-    cutilSafeCall(cudaMemcpy2D(ImgSrcF, ImgSrcFStride * sizeof(float), 
-                                Diff, DiffStride * sizeof(float), 
+    cutilSafeCall(cudaMemcpy2D(ImgSrcF, ImgSrcFStride * sizeof(float),
+                                Diff, DiffStride * sizeof(float),
                                 Size.width * sizeof(float), Size.height,
                                 cudaMemcpyDeviceToHost) );
-                                   
+
     CopyFloat2Byte(ImgSrcF, ImgSrcFStride, ImgDst, Stride, Size);
 
     //clean up memory
@@ -555,8 +641,6 @@ main( int argc, char** argv)
 		//TimeCUDA = ThrustImageDiff(ImgBack, ImgCur, ImgDst, ImgSize, ImgSrcStride, ImgBackStride);
 		printf("Processing time (Difference)    : %f ms \n", TimeCUDA);
 		ImgCur = NextImage(ImgCur, ImgSrcStride, ImgSize);
-		//dump result of Gold 1 processing
-	    //printf("Erode image\n");
 
 		TimeCUDA = MorphObjects(ImgDst, ImgBW, ImgSize, ImgBWStride);
 	    printf("Processing time (Morph)    : %f ms \n", TimeCUDA);

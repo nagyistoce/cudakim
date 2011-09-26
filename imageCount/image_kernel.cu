@@ -124,6 +124,30 @@ erodeImage( float* dst, float* src, int width)
 }
 
 __global__ void
+erodeImageByte( byte* dst, byte* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // read in input data from global memory
+  // Structuring element
+  byte pix01 = src[(row - 1) * width + col];
+  byte pix10 = src[row * width + col - 1];
+  byte pix11 = src[row * width + col];
+  byte pix12 = src[row * width + col + 1];
+  byte pix21 = src[(row + 1) * width + col];
+
+  // Erode morphological operation
+  float sum = pix01 + pix10 + pix11 + pix12 + pix21;
+  byte pixel = 255;
+  if (sum < 255.0f*5)
+	  pixel = 0;
+
+  dst[row * width + col] = pixel;
+
+}
+
+__global__ void
 dilateImage( float* dst, float* src, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -142,6 +166,33 @@ dilateImage( float* dst, float* src, int width)
        (pix21 >= 255.0f) )
   {
 	  dst[row * width + col] = 255.0f;
+  }
+  else
+  {
+	  dst[row * width + col] = pix11;
+  }
+
+}
+
+__global__ void
+dilateImageByte( byte* dst, byte* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  byte pix01 = src[(row - 1) * width + col];
+  byte pix10 = src[row * width + col - 1];
+  byte pix11 = src[row * width + col];
+  byte pix12 = src[row * width + col + 1];
+  byte pix21 = src[(row + 1) * width + col];
+
+  // Dilate morphological operation
+  if ( (pix01 == 255) |
+       (pix10 == 255) |
+       (pix12 == 255) |
+       (pix21 == 255) )
+  {
+	  dst[row * width + col] = 255;
   }
   else
   {
@@ -188,6 +239,19 @@ tresholdImage( float* dst, float* src, int width, int th)
   else
   	dst[row * width + col] = 0;
   
+}
+
+__global__ void
+tresholdImageByte( byte* dst, byte* src, int width, byte th)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (src[row * width + col] > th)
+  	dst[row * width + col] = 255;
+  else
+  	dst[row * width + col] = 0;
+
 }
 
 __global__ void
