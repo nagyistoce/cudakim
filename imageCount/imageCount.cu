@@ -56,7 +56,7 @@ static unsigned int timerTotalCUDA = 0;
 int
 main( int argc, char** argv) 
 {
-	byte *ImgSrc, *ImgDst, *ImgBW, *ImgBack, *ImgCur;
+	byte *ImgSrc, *ImgDst, *ImgDiff, *ImgBW, *ImgBack, *ImgCur;
 	ROI ImgSize, ImgBackSize;
 	int ImgSrcStride, ImgDstStride, ImgBackStride, ImgBWStride;
     int devID;
@@ -125,6 +125,7 @@ main( int argc, char** argv)
     }
 
     // Allocate BW image
+    ImgDiff = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBWStride);
     ImgBW = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBWStride);
 
     printf("--------------------------------------------------\n");
@@ -133,20 +134,22 @@ main( int argc, char** argv)
     ImgCur = ImgSrc;
     for (int i = 1; i <= depth; i++)
     {
-		TimeCUDA = DiffImages(ImgDst, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
+		TimeCUDA = DiffImages(ImgDiff, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
 		//TimeCUDA = ThrustImageDiff(ImgDst, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
 		printf("Processing time (DiffImages)      : %f ms \n", TimeCUDA);
 		ImgCur = NextImage(ImgCur, ImgSrcStride, ImgSize);
 
-		TimeCUDA = MorphObjects(ImgBW, ImgDst, ImgSize, ImgBWStride);
+		TimeCUDA = MorphObjects(ImgBW, ImgDiff, ImgSize, ImgBWStride);
 	    printf("Processing time (MorphObjects)    : %f ms \n", TimeCUDA);
 
 	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride);
 	    printf("Processing time (LabelObjects)    : %f ms \n", TimeCUDA);
 
 		sprintf(ImageName, TestImageFname, i);
-		printf("Dumping BW image to %s...\n", ImageName);
-		DumpBmpAsGray(ImageName, ImgBW, ImgBWStride, ImgSize);
+		//printf("Dumping BW image to %s...\n", ImageName);
+		//DumpBmpAsGray(ImageName, ImgBW, ImgBWStride, ImgSize);
+		printf("Dumping Diff image to %s...\n", ImageName);
+		DumpBmpAsGray(ImageName, ImgDiff, ImgBWStride, ImgSize);
 
 		sprintf(ImageName, TestImageFname, i+10);
 		printf("Dumping Label image to %s...\n", ImageName);
@@ -160,6 +163,7 @@ main( int argc, char** argv)
     //release byte planes
     FreePlane(ImgSrc);
     FreePlane(ImgDst);
+    FreePlane(ImgDiff);
     FreePlane(ImgBack);
     FreePlane(ImgBW);
 

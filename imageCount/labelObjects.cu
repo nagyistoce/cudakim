@@ -227,6 +227,8 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride)
 
     cutilCheckMsg("Kernel execution failed");
 
+    printf("Objects found                     : %d\n", n/10);
+
     cutilSafeCall(cudaMemcpy2D(dst, Stride * sizeof(byte),
     						   ImgXres, ImgResStride * sizeof(byte),
                                Size.width * sizeof(byte), Size.height,
