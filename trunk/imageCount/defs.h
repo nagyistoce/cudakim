@@ -18,7 +18,7 @@
 /**
 *  Number of images to analyze - should be equal to number of pictures to analyze
 */
-#define DEPTH 				9
+#define DEPTH 				9 // Number of images to analyze
 
 typedef struct
 {

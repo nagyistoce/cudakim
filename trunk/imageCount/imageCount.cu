@@ -51,11 +51,11 @@
 static unsigned int timerTotalCUDA = 0;
 
 /* Remaining work -
-* - Color result images
-* - Update input images using matlab - remove header time
-* - Gausian bluring of diff images
-* - Optimize labelObjects
+* OK - Color result images
+* OK - Update input images using matlab - remove header time
+* - Optimize labelObjects - reduction kernel
 * - Run computeprof
+* - Gausian bluring of diff images
 * - Document results
 */
 
@@ -72,6 +72,7 @@ main( int argc, char** argv)
     int depth = DEPTH;
     float TimeCUDA;
     char ImageName[50];
+    int ObjectsFound, Objects;
 
     //char ImageFname[] = "rice.bmp";
     char ImageFname[] = "data/E45nord%d.bmp";
@@ -146,6 +147,7 @@ main( int argc, char** argv)
     printf("Locating and label of objects based on %s...\n", ImageBackFname);
 
     ImgCur = ImgSrc;
+    ObjectsFound = 0;
     for (int i = 1; i <= depth; i++)
     {
 		TimeCUDA = DiffImages(ImgDiff, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
@@ -156,8 +158,9 @@ main( int argc, char** argv)
 		TimeCUDA = MorphObjects(ImgBW, ImgDiff, ImgSize, ImgBWStride);
 	    printf("Processing time (MorphObjects)    : %f ms \n", TimeCUDA);
 
-	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride);
+	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride, &Objects);
 	    printf("Processing time (LabelObjects)    : %f ms \n", TimeCUDA);
+	    ObjectsFound += Objects;
 
 		sprintf(ImageName, TestImageFname, i);
 		//printf("Dumping BW image to %s...\n", ImageName);
@@ -167,12 +170,14 @@ main( int argc, char** argv)
 
 		sprintf(ImageName, TestImageFname, i+10);
 		printf("Dumping Label image to %s...\n", ImageName);
-		DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
+		//DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
+		DumpBmpColorMap(ImageName, ImgDst, ImgDstStride, ImgSize, redColorMap, RED_COLOR_MAP_SIZE);
     }
 
     StopTimer(timerTotalCUDA);
     float time = GetTimer(timerTotalCUDA);
-    printf("Processing time (Total)    : %f ms \n", time);
+    printf("Processing time (Total)         : %f ms \n", time);
+    printf("Total number of objects found   : %d \n", ObjectsFound);
 
     //release byte planes
     FreePlane(ImgSrc);

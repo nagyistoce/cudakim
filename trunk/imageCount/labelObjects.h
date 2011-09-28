@@ -9,6 +9,6 @@
 #define LABELOBJECTS_H_
 
 // Label objects found in image bw and stores result in dst image
-float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride);
+float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers);
 
 #endif /* LABELOBJECTS_H_ */
