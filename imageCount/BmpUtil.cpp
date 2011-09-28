@@ -44,6 +44,34 @@
 #pragma warning( disable : 4996 ) // disable deprecated warning 
 #endif
 
+BMPColorMap redColorMap[RED_COLOR_MAP_SIZE] =
+{     //r,   g,   b      map index
+	{	0,   0,   0 },  // 0
+	{ 255,  20,   0 },  // Red
+	{  60, 255, 220 },
+	{ 255, 220,   0 },
+	{ 255,  40,   0 },
+	{  80, 255, 200 },
+	{ 255, 200,   0 },
+	{ 255,  60,   0 },
+	{ 100, 255, 180 },
+	{ 255,  80,   0 },
+	{ 255, 180,   0 },
+	{ 120, 255, 160 },
+	{ 220, 255,  60 },
+	{ 255, 100,   0 },
+	{ 140, 255, 140 },
+	{ 255, 120,   0 },  // Orange
+	{ 160, 255, 120 },  // Green
+	{ 240, 255,  40 },
+	{ 255, 140,   0 },
+	{ 180, 255, 100 },
+	{ 255, 255,  20 },
+	{ 255, 160,   0 },
+	{ 200, 255,  80 },
+	{ 255, 240,   0 },  // Yellow
+	{  50, 255, 255 }   // Blue
+};
 
 /**
 **************************************************************************
@@ -348,6 +376,67 @@ void LoadBmpAsGray(char *FileName, int Stride, ROI ImSize, byte *Img)
 
 	fclose(fh);
 	return;
+}
+
+/**
+**************************************************************************
+*  This function performs dumping of bitmap luma on HDD
+*
+* \param FileName		[OUT] - Image name to dump to
+* \param Img			[IN] - Image luma to dump
+* \param Stride			[IN] - Image stride
+* \param ImSize			[IN] - Image size
+* \param Map			[IN] - Color map
+* \param SizeMap		[IN] - Size of color map
+*
+* \return None
+*/
+void DumpBmpColorMap(char *FileName, byte *Img, int Stride, ROI ImSize, BMPColorMap *Map, int SizeMap)
+{
+	FILE *fp = NULL;
+	fp = fopen(FileName, "wb");
+    if (fp == NULL)
+	{
+    	return;
+    }
+
+	BMPFileHeader FileHeader;
+	BMPInfoHeader InfoHeader;
+
+	//init headers
+	FileHeader._bm_signature = 0x4D42;
+	FileHeader._bm_file_size = 54 + 3 * ImSize.width * ImSize.height;
+	FileHeader._bm_reserved = 0;
+	FileHeader._bm_bitmap_data = 0x36;
+	InfoHeader._bm_bitmap_size = 0;
+	InfoHeader._bm_color_depth = 24;
+	InfoHeader._bm_compressed = 0;
+	InfoHeader._bm_hor_resolution = 0;
+	InfoHeader._bm_image_height = ImSize.height;
+	InfoHeader._bm_image_width = ImSize.width;
+	InfoHeader._bm_info_header_size = 40;
+	InfoHeader._bm_num_colors_used = 0;
+	InfoHeader._bm_num_important_colors = 0;
+	InfoHeader._bm_num_of_planes = 1;
+	InfoHeader._bm_ver_resolution = 0;
+
+	fwrite(&FileHeader, sizeof(BMPFileHeader), 1, fp);
+	fwrite(&InfoHeader, sizeof(BMPInfoHeader), 1, fp);
+
+	for (int i = ImSize.height - 1; i>=0; i--)
+	{
+		for (int j=0; j<ImSize.width; j++)
+		{
+			byte mapIdx = Img[i*Stride+j];
+			if (mapIdx >= SizeMap)
+				mapIdx = SizeMap-1;
+			fwrite(&(Map[mapIdx].b), 1, 1, fp);
+			fwrite(&(Map[mapIdx].g), 1, 1, fp);
+			fwrite(&(Map[mapIdx].r), 1, 1, fp);
+		}
+	}
+
+	fclose(fp);
 }
 
 

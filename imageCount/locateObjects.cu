@@ -158,7 +158,9 @@ dilate5SEImageByte( byte* dst, byte* src, int width)
 
   // Dilate morphological operation SE[5x5]
   if (
+	   (src[(row - 2) * width + col - 1] == 255) |
 	   (src[(row - 2) * width + col] == 255) |
+	   (src[(row - 2) * width + col + 1] == 255) |
 	   (src[(row - 1) * width + col - 1] == 255) |
 	   (src[(row - 1) * width + col] == 255) |
 	   (src[(row - 1) * width + col + 1] == 255) |
@@ -169,7 +171,9 @@ dilate5SEImageByte( byte* dst, byte* src, int width)
        (src[(row + 1) * width + col - 1] == 255) |
        (src[(row + 1) * width + col] == 255) |
        (src[(row + 1) * width + col + 1] == 255) |
-       (src[(row + 2) * width + col] == 255)
+       (src[(row + 2) * width + col - 1] == 255) |
+       (src[(row + 2) * width + col] == 255) |
+       (src[(row + 2) * width + col + 1] == 255)
        )
   {
 	  dst[row * width + col] = 255;
@@ -195,15 +199,15 @@ tresholdImageFloat( float* dst, float* src, int width, int th)
 }
 
 __global__ void
-tresholdImageByte( byte* dst, byte* src, int width, byte th)
+tresholdImageByte( byte* dst, byte* src, int strideDst, int strideSrc, byte th)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-  if (src[row * width + col] > th)
-  	dst[row * width + col] = 255;
+  if (src[row * strideSrc + col] > th)
+  	dst[row * strideDst + col] = 255;
   else
-  	dst[row * width + col] = 0;
+  	dst[row * strideDst + col] = 0;
 
 }
 
@@ -275,10 +279,13 @@ float DiffImages(byte *ImgDst, byte *ImgBack, byte *ImgSrc, ROI Size, int ISStri
     return GetTimer(timerCUDA);
 }
 
+#define BOARDER_SIZE		4 // Additional boarder added to image for dilation, errosion and blurring
+#define ADD_BOARDER(ptr, stride) (ptr + stride*BOARDER_SIZE*sizeof(byte) + BOARDER_SIZE*sizeof(byte));
+
 // Performs thresholding and morphological operations like dilation and erode of image
 float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
 {
-    byte *Src, *DstBW, *Dst1, *Dst2;
+    byte *Src, *DstBW, *DstBWb, *Dst1, *Dst1b, *Dst2, *Dst2b;
     size_t DstStride, SrcStride;
 
     printf("[MorphObjects]\n");
@@ -295,11 +302,26 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
                                cudaMemcpyHostToDevice) );
 
     // Allocation of device memory for 2D destination image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst1), &DstStride, Size.width * sizeof(byte), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst2), &DstStride, Size.width * sizeof(byte), Size.height));
-    DstStride /= sizeof(byte);
+    ROI SB = Size;
+    SB.width += BOARDER_SIZE*2; // Add black boarders to allocated device image memory buffers
+    SB.height += BOARDER_SIZE*2;
+
+    cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, SB.width * sizeof(byte), SB.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&Dst1), &DstStride, SB.width * sizeof(byte), SB.height));
+    cutilSafeCall(cudaMallocPitch((void **)(&Dst2), &DstStride, SB.width * sizeof(byte), SB.height));
+
     //printf("DstStride %d\n", DstStride);
+    // Clear device memory for all images
+    cutilSafeCall(cudaMemset2D((void *)(DstBW), DstStride, 0, SB.width * sizeof(byte), SB.height));
+    cutilSafeCall(cudaMemset2D((void *)(Dst1), DstStride, 0, SB.width * sizeof(byte), SB.height));
+    cutilSafeCall(cudaMemset2D((void *)(Dst2), DstStride, 0, SB.width * sizeof(byte), SB.height));
+    DstStride /= sizeof(byte);
+
+    // Add black boarder to all images in 2D device memory
+    // Needed since erode and dilate image structuring elements SE are [3x3] and [5x5]
+    DstBWb = ADD_BOARDER(DstBW, DstStride);
+    Dst1b = ADD_BOARDER(Dst1, DstStride);
+    Dst2b = ADD_BOARDER(Dst2, DstStride);
 
     //setup execution parameters
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
@@ -313,14 +335,14 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     RestartTimer(timerCUDA);
 
     // Generate BW image
-    tresholdImageByte<<< grid, threads >>>(DstBW, Src, DstStride, 15);
+    tresholdImageByte<<< grid, threads >>>(DstBWb, Src, DstStride, SrcStride, 25);
     cutilSafeCall(cudaThreadSynchronize());
 
     // Erode image with structuring element
-    erodeImageByte<<< grid, threads >>>(Dst1, DstBW, DstStride);
+    erodeImageByte<<< grid, threads >>>(Dst1b, DstBWb, DstStride);
     // Dilate image with structuring element
     //dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
-    dilate5SEImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
+    dilate5SEImageByte<<< grid, threads >>>(Dst2b, Dst1b, DstStride);
 
     StopTimer(timerCUDA);
 
@@ -328,7 +350,7 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
 
     //copy eroded image from device memory to host memory in Src
     cutilSafeCall(cudaMemcpy2D(ImgDst, Stride * sizeof(byte),
-                                Dst2, DstStride * sizeof(byte),
+                                Dst2b, DstStride * sizeof(byte),
                                 Size.width * sizeof(byte), Size.height,
                                 cudaMemcpyDeviceToHost) );
 

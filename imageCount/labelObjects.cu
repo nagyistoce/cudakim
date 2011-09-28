@@ -120,9 +120,9 @@ static bool isImageBlank(byte *img, ROI Size, int Stride)
 	return blank;
 }
 
-float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride)
+float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
 {
-	int n = 10;
+	int n = 1;
 	POINT point;
 	int ImgResStride;
 	size_t ImgDevStride;
@@ -204,7 +204,7 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride)
          	    // Images are equal
     	    	// h = find(Xk == 1); Xres(h) = n;
     	    	lableImageObject<<< grid, threads >>>(ImgDevXres, ImgDevXk, ImgDevStride, n);
-    	    	n = n + 10;
+    	    	n = n + 1;
     	    	break;
     	    }
 
@@ -227,7 +227,7 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride)
 
     cutilCheckMsg("Kernel execution failed");
 
-    printf("Objects found                     : %d\n", n/10);
+    printf("Objects found                     : %d\n", (n - 1));
 
     cutilSafeCall(cudaMemcpy2D(dst, Stride * sizeof(byte),
     						   ImgXres, ImgResStride * sizeof(byte),
@@ -242,6 +242,7 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride)
 	FreePlane(ImgTmp);
 	FreePlane(ImgXres);
 
+	*Numbers = n;
 	// Find first
 	return GetTimer(timerCUDA);
 }

@@ -83,6 +83,14 @@ typedef struct
 	uint32 _bm_num_important_colors;		//!< Number of important colors, assumed to be 0
 } BMPInfoHeader;
 
+typedef struct	// RGB color map index
+{
+	byte r;
+	byte g;
+	byte b;
+} BMPColorMap;
+
+#define RED_COLOR_MAP_SIZE  25
 
 #ifdef _WIN32
     #pragma pack(pop)
@@ -92,6 +100,8 @@ typedef struct
 
 extern "C" 
 {
+	extern BMPColorMap redColorMap[RED_COLOR_MAP_SIZE];
+
 	int clamp_0_255(int x);
 	float round_f(float num);
 	byte *MallocPlaneByte(int width, int height, int *pStepBytes);
@@ -106,6 +116,7 @@ extern "C"
 	int PreLoadBmp(char *FileName, int *Width, int *Height);
 	void LoadBmpAsGray(char *FileName, int Stride, ROI ImSize, byte *Img);
 	void DumpBmpAsGray(char *FileName, byte *Img, int Stride, ROI ImSize);
+	void DumpBmpColorMap(char *FileName, byte *Img, int Stride, ROI ImSize, BMPColorMap *Map, int SizeMap);
 	void DumpBlockF(float *PlaneF, int StrideF, char *Fname);
 	void DumpBlock(byte *Plane, int Stride, char *Fname);
 	float CalculateMSE(byte *Img1, byte *Img2, int Stride, ROI Size);
