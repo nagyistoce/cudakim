@@ -73,7 +73,7 @@ median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, 
 		  median[z] = row[colIdx];
 	  }
 
-	  //insertionsort(median, depth);
+	  insertionsort(median, depth);
 
 	  // Update average of images
 	  dst[rowIdx * stride + colIdx] = median[(DEPTH+1)/2];
