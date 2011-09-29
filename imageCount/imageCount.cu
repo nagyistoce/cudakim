@@ -115,7 +115,7 @@ main( int argc, char** argv)
 
     //printf("Image src stride %d\n", ImgSrcStride);
 
-#if 1 // Save temporary background image in file
+#if 0 // Save temporary background image in file
     TimeCUDA = ImageBackground(ImgDst, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
 
