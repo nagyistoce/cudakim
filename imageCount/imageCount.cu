@@ -66,7 +66,7 @@ int
 main( int argc, char** argv) 
 {
 	byte *ImgSrc, *ImgDst, *ImgDiff, *ImgBW, *ImgBack, *ImgCur;
-	ROI ImgSize, ImgBackSize;
+	ROI ImgSize; // ImgBackSize;
 	int ImgSrcStride, ImgDstStride, ImgBackStride, ImgBWStride;
     int devID;
     int depth = DEPTH;
@@ -75,9 +75,9 @@ main( int argc, char** argv)
     int ObjectsFound, Objects;
 
     //char ImageFname[] = "rice.bmp";
+    //char ImageBackFname[] = "nordBack.bmp";
     char ImageFname[] = "data/E45nord%d.bmp";
     char BackImageFname[] = "nordBackground.bmp";
-    char ImageBackFname[] = "nordBack.bmp";
     char TestImageFname[] = "nordResult%d.bmp";
 
     printf("Program counting objects in series of images\n");
@@ -111,21 +111,20 @@ main( int argc, char** argv)
     CreateTimer(&timerTotalCUDA);
     StartTimer(timerTotalCUDA);
 
-    ImgDst = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDstStride);
+    ImgBack = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBackStride);
 
     //printf("Image src stride %d\n", ImgSrcStride);
-    TimeCUDA = ImageBackground(ImgDst, ImgSrc, ImgSize, ImgSrcStride, depth);
+    TimeCUDA = ImageBackground(ImgBack, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
 
-#if 1 // Save temporary background image in file
-    
+    // Save temporary background image in file
     //Dump result of finding background image
     printf("Dumping background image to %s...\n", BackImageFname);
-    DumpBmpAsGray(BackImageFname, ImgDst, ImgDstStride, ImgSize);
-
-    printf("--------------------------------------------------\n");
-
+    DumpBmpAsGray(BackImageFname, ImgBack, ImgBackStride, ImgSize);
     //------------------------------------------------------------------------------------------
+
+    /*
+    printf("--------------------------------------------------\n");
     // Testing of diff background with images
     // Load image and allocate memory
     if (loadImage(ImageBackFname, argv[0], &ImgBack, &ImgBackSize, &ImgBackStride))
@@ -134,17 +133,15 @@ main( int argc, char** argv)
         cutilExit(argc, argv);
         return 1;
     }
-#else
-    ImgBack = ImgDst;
-    ImgBackStride = ImgDstStride;
-#endif
+    */
 
-    // Allocate BW image
+    // Allocate images
+    ImgDst = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDstStride);
     ImgDiff = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBWStride);
     ImgBW = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBWStride);
 
     printf("--------------------------------------------------\n");
-    printf("Locating and label of objects based on %s...\n", ImageBackFname);
+    printf("Locating and label of objects based on background \n");
 
     ImgCur = ImgSrc;
     ObjectsFound = 0;
@@ -181,8 +178,7 @@ main( int argc, char** argv)
 
     //release byte planes
     FreePlane(ImgSrc);
-    if (ImgBack != ImgDst) 
-	FreePlane(ImgBack);
+ 	FreePlane(ImgBack);
     FreePlane(ImgDst);
     FreePlane(ImgDiff);
     FreePlane(ImgBW);
