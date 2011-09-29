@@ -55,6 +55,24 @@ __device__ void insertionsort(byte *a, int depth)
 	}
 }
 
+__device__ void swap (byte *x, byte *y)
+{
+	byte tmp;
+	tmp = *x;
+	*x = *y;
+	*y = tmp;
+}
+
+__device__ void bublesort (byte *a, int depth)
+{
+	int i, j;
+	for (i = 0; i < (depth-1); i++)
+		for (j = 0; j < (depth-(i+1)); j++)
+			if (a[j] > a[j+1])
+				swap(&a[j], &a[j+1]);
+}
+
+
 __global__ void
 median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
 {
@@ -73,7 +91,8 @@ median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, 
 		  median[z] = row[colIdx];
 	  }
 
-	  insertionsort(median, depth);
+	  //insertionsort(median, depth); // NOT WORKING ON MINIMAC
+	  bublesort(median, depth);
 
 	  // Update average of images
 	  dst[rowIdx * stride + colIdx] = median[(DEPTH+1)/2];
