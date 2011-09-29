@@ -99,10 +99,6 @@ main( int argc, char** argv)
     // get number of SMs on this GPU
     PrintDeviceProperties();
 
-    // Initialize timer
-	CreateTimer(&timerTotalCUDA);
-	StartTimer(timerTotalCUDA);
-
     // Load images 1-9 and allocate memory
     if (loadImages(ImageFname, argv[0], &ImgSrc, &ImgSize, &ImgSrcStride, depth))
     {
@@ -111,14 +107,18 @@ main( int argc, char** argv)
         return 1;
     }
     
+    // Initialize timer
+    CreateTimer(&timerTotalCUDA);
+    StartTimer(timerTotalCUDA);
+
     ImgDst = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDstStride);
 
     //printf("Image src stride %d\n", ImgSrcStride);
-
-#if 0 // Save temporary background image in file
     TimeCUDA = ImageBackground(ImgDst, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
 
+#if 1 // Save temporary background image in file
+    
     //Dump result of finding background image
     printf("Dumping background image to %s...\n", BackImageFname);
     DumpBmpAsGray(BackImageFname, ImgDst, ImgDstStride, ImgSize);
@@ -135,8 +135,8 @@ main( int argc, char** argv)
         return 1;
     }
 #else
-    TimeCUDA = ImageBackground(ImgBack, ImgSrc, ImgSize, ImgSrcStride, depth);
-    printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
+    ImgBack = ImgDst;
+    ImgBackStride = ImgDstStride;
 #endif
 
     // Allocate BW image
@@ -170,8 +170,8 @@ main( int argc, char** argv)
 
 		sprintf(ImageName, TestImageFname, i+10);
 		printf("Dumping Label image to %s...\n", ImageName);
-		//DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
 		DumpBmpColorMap(ImageName, ImgDst, ImgDstStride, ImgSize, redColorMap, RED_COLOR_MAP_SIZE);
+		//DumpBmpAsGray(ImageName, ImgDst, ImgDstStride, ImgSize);
     }
 
     StopTimer(timerTotalCUDA);
@@ -181,9 +181,10 @@ main( int argc, char** argv)
 
     //release byte planes
     FreePlane(ImgSrc);
+    if (ImgBack != ImgDst) 
+	FreePlane(ImgBack);
     FreePlane(ImgDst);
     FreePlane(ImgDiff);
-    FreePlane(ImgBack);
     FreePlane(ImgBW);
 
     cutilExit(argc, argv);
