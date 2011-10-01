@@ -82,7 +82,7 @@ main( int argc, char** argv)
     char BackImageFname[] = "nordBackground.bmp";
     char TestImageFname[] = "nordResult%d.bmp";
 
-    printf("ImageCount version 1.0\n")
+    printf("ImageCount version 1.0\n");
     printf("Program counting objects in series of images\n");
     printf("--------------------------------------------------\n");
 
