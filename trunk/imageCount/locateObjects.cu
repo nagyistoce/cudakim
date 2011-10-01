@@ -227,21 +227,21 @@ float DiffImages(byte *ImgDst, byte *ImgBack, byte *ImgSrc, ROI Size, int ISStri
     byte  *Diff, *Back, *Src;
     size_t DiffStride, SrcStride, BackStride;
 
-    printf("[DiffImages]\n");
+    DEBUG_MSG("[DiffImages]\n");
 
     // Allocation of device memory for 2D difference image
     cutilSafeCall(cudaMallocPitch((void **)(&Diff), &DiffStride, Size.width * sizeof(byte), Size.height));
     DiffStride /= sizeof(byte);
-    //printf("DiffStride %d\n", DiffStride);
+    //DEBUG_MSG("DiffStride %d\n", DiffStride);
 
     // Allocation of memory for 2D background and source image in byte format
     cutilSafeCall(cudaMallocPitch((void **)(&Back), &BackStride, Size.width * sizeof(byte), Size.height));
     BackStride /= sizeof(byte);
-    //printf("BackStride %d\n", BackStride);
+    //DEBUG_MSG("BackStride %d\n", BackStride);
 
     cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(byte), Size.height));
     SrcStride /= sizeof(byte);
-    //printf("SrcStride %d\n", SrcStride);
+    //DEBUG_MSG("SrcStride %d\n", SrcStride);
 
     //copy background image from host memory to device
     cutilSafeCall(cudaMemcpy2D(Back, BackStride * sizeof(byte),
@@ -258,8 +258,8 @@ float DiffImages(byte *ImgDst, byte *ImgBack, byte *ImgSrc, ROI Size, int ISStri
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid( ceil((float)Size.width / BLOCK_SIZE), ceil((float)Size.height / BLOCK_SIZE) );
 
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     if (timerCUDA == 0) CreateTimer(&timerCUDA);
     RestartTimer(timerCUDA);
@@ -288,12 +288,12 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     byte *Src, *DstBW, *DstBWb, *Dst1, *Dst1b, *Dst2, *Dst2b;
     size_t DstStride, SrcStride;
 
-    printf("[MorphObjects]\n");
+    DEBUG_MSG("[MorphObjects]\n");
 
     // Allocation of memory for 2D source image in single precision format
     cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(byte), Size.height));
     SrcStride /= sizeof(byte);
-    //printf("SrcStride %d\n", SrcStride);
+    //DEBUG_MSG("SrcStride %d\n", SrcStride);
 
     //copy source image from host memory to device
     cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(byte),
@@ -310,7 +310,7 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     cutilSafeCall(cudaMallocPitch((void **)(&Dst1), &DstStride, SB.width * sizeof(byte), SB.height));
     cutilSafeCall(cudaMallocPitch((void **)(&Dst2), &DstStride, SB.width * sizeof(byte), SB.height));
 
-    //printf("DstStride %d\n", DstStride);
+    //DEBUG_MSG("DstStride %d\n", DstStride);
     // Clear device memory for all images
     cutilSafeCall(cudaMemset2D((void *)(DstBW), DstStride, 0, SB.width * sizeof(byte), SB.height));
     cutilSafeCall(cudaMemset2D((void *)(Dst1), DstStride, 0, SB.width * sizeof(byte), SB.height));
@@ -327,8 +327,8 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
 
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     // start CUDA timer
     if (timerCUDA == 0) CreateTimer(&timerCUDA);
@@ -371,7 +371,7 @@ float MorphObjectsFloat(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     float *Dst, *DstBW, *Src, *Diff;
     size_t DstStride, SrcStride, DiffStride;
 
-    printf("[MorphObjectsFloat]\n");
+    DEBUG_MSG("[MorphObjectsFloat]\n");
 
     //convert source image to float representation
     int ImgSrcFStride;
@@ -381,7 +381,7 @@ float MorphObjectsFloat(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     // Allocation of memory for 2D source image in single precision format
     cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(float), Size.height));
     SrcStride /= sizeof(float);
-    //printf("SrcStride %d\n", SrcStride);
+    //DEBUG_MSG("SrcStride %d\n", SrcStride);
 
     //copy source image from host memory to device
     cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(float),
@@ -401,8 +401,8 @@ float MorphObjectsFloat(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
 
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     //create and start CUDA timer
     if (timerCUDA == 0) CreateTimer(&timerCUDA);

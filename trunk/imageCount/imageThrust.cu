@@ -73,7 +73,7 @@ float ThrustImageDiff(byte *ImgDst, byte *ImgBack, byte *ImgSrc, ROI Size, int I
     float elapsed_time;
     int idx, ImgSize = ISStride*Size.height*sizeof(byte);
 
-    printf("[ThrustImageDiff]\n");
+    DEBUG_MSG("[ThrustImageDiff]\n");
 
     cudaEventCreate(&start);
     cudaEventCreate(&end);

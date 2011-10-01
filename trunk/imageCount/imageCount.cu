@@ -71,6 +71,8 @@ main( int argc, char** argv)
     int devID;
     int depth = DEPTH;
     float TimeCUDA;
+    float TimeTotal = 0;
+    float TimeLableObjects = 0;
     char ImageName[50];
     int ObjectsFound, Objects;
 
@@ -80,6 +82,7 @@ main( int argc, char** argv)
     char BackImageFname[] = "nordBackground.bmp";
     char TestImageFname[] = "nordResult%d.bmp";
 
+    printf("ImageCount version 1.0\n")
     printf("Program counting objects in series of images\n");
     printf("--------------------------------------------------\n");
 
@@ -116,6 +119,7 @@ main( int argc, char** argv)
     //printf("Image src stride %d\n", ImgSrcStride);
     TimeCUDA = ImageBackground(ImgBack, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
+    TimeTotal += TimeCUDA;
 
     // Save temporary background image in file
     //Dump result of finding background image
@@ -150,13 +154,19 @@ main( int argc, char** argv)
 		TimeCUDA = DiffImages(ImgDiff, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
 		//TimeCUDA = ThrustImageDiff(ImgDst, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
 		printf("Processing time (DiffImages)      : %f ms \n", TimeCUDA);
-		ImgCur = NextImage(ImgCur, ImgSrcStride, ImgSize);
+	    TimeTotal += TimeCUDA;
+
+	    ImgCur = NextImage(ImgCur, ImgSrcStride, ImgSize);
 
 		TimeCUDA = MorphObjects(ImgBW, ImgDiff, ImgSize, ImgBWStride);
 	    printf("Processing time (MorphObjects)    : %f ms \n", TimeCUDA);
+	    TimeTotal += TimeCUDA;
 
 	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride, &Objects);
 	    printf("Processing time (LabelObjects)    : %f ms \n", TimeCUDA);
+	    TimeTotal += TimeCUDA;
+	    TimeLableObjects += TimeCUDA;
+
 	    ObjectsFound += Objects;
 
 		sprintf(ImageName, TestImageFname, i);
@@ -173,8 +183,11 @@ main( int argc, char** argv)
 
     StopTimer(timerTotalCUDA);
     float time = GetTimer(timerTotalCUDA);
-    printf("Processing time (Total)         : %f ms \n", time);
-    printf("Total number of objects found   : %d \n", ObjectsFound);
+    printf("Image processing time (Total)     : %f ms \n", TimeTotal);
+    printf("Image label objects time (Total)  : %f ms \n", TimeLableObjects);
+    printf("Processing time (Total)           : %f ms \n", time);
+
+    printf("Total number of objects found     : %d \n", ObjectsFound);
 
     //release byte planes
     FreePlane(ImgSrc);

@@ -33,7 +33,7 @@ loadImage(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *im
     //char *pImageFpath = cutFindFilePath(fileName, path);
     char *pImageFpath = fileName;
 
-    printf("[loadImage]\n%s\n", pImageFpath);
+    DEBUG_MSG("[loadImage]\n%s\n", pImageFpath);
 
     int res = PreLoadBmp(pImageFpath, &ImgWidth, &ImgHeight);
     imgSize->width = ImgWidth;
@@ -63,7 +63,7 @@ loadImage(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *im
         return 1;
     }
 
-    printf("Image size [%d x %d], %d \n", ImgWidth, ImgHeight, *imgStride);
+    DEBUG_MSG("Image size [%d x %d], %d \n", ImgWidth, ImgHeight, *imgStride);
 
     return 0;
 }
@@ -82,7 +82,7 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
 
     sprintf(ImageName, fileName, 1);
 
-    printf("[loadImages]\n");
+    DEBUG_MSG("[loadImages]\n");
 
     int res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
     if (res)
@@ -114,7 +114,7 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
     //load sample images
     for (int i = 1; i <= depth; i++)
     {
-        printf("Loading image %s [%d,%d] \n", ImageName, ImgWidth, ImgHeight);
+    	DEBUG_MSG("Loading image %s [%d,%d] \n", ImageName, ImgWidth, ImgHeight);
     	sprintf(ImageName, fileName, i);
     	res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
         if (res)
@@ -130,7 +130,7 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
     }
 
 
-    printf("Images size [%d * %d * %d], stride %d \n", ImgWidth, ImgHeight, depth, *imgStride);
+    DEBUG_MSG("Images size [%d * %d * %d], stride %d \n", ImgWidth, ImgHeight, depth, *imgStride);
 
     return 0;
 }

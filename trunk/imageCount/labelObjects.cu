@@ -63,7 +63,7 @@ dilateOriginalImageByte(byte* dst, byte* src, byte *org, int width)
 }
 
 __global__ void
-diffImageReduced( byte* dst, byte* xk, byte *xk1, int stride)
+diffImageReduction( byte* dst, byte* xk, byte *xk1, int stride)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -132,13 +132,13 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
     byte *ImgDevTmp;
     byte *ImgDevXres;
 
-    printf("[LabelObjects]\n");
+    DEBUG_MSG("[LabelObjects]\n");
 
     // Create result image on host
     byte *ImgTmp = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
     byte *ImgXres = MallocPlaneByte(Size.width, Size.height, &ImgResStride);
     ImgResStride /= sizeof(byte);
-    //printf("ImgResStride %d\n", ImgResStride);
+    //DEBUG_MSG("ImgResStride %d\n", ImgResStride);
 
     cutilSafeCall(cudaMemcpy2D(ImgXres, ImgResStride * sizeof(byte),
     						   bw, Stride * sizeof(byte),
@@ -163,14 +163,14 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
                                cudaMemcpyHostToDevice) );
 
     ImgDevStride /= sizeof(byte);
-    //printf("ImgDevStride %d\n", ImgDevStride);
+    //DEBUG_MSG("ImgDevStride %d\n", ImgDevStride);
 
     //setup execution parameters
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
 
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     // start CUDA timer
     if (timerCUDA == 0) CreateTimer(&timerCUDA);
@@ -191,7 +191,7 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
     		dilateOriginalImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
 
     		// Compare if image are equal DiffBWImg(Xk, Xk_1) == 1 - reduced version kbe???
-    		diffImageReduced<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
+    		diffImageReduction<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
     		// Copy difference of images
     	    cutilSafeCall(cudaMemcpy2D(ImgTmp, ImgResStride * sizeof(byte),
     	    						   ImgDevTmp, ImgDevStride * sizeof(byte),
@@ -200,7 +200,7 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
 
     	    if (isImageBlank(ImgTmp, Size, Stride))
     	    {
-    	    	//printf("Object %d found\n", n);
+    	    	//DEBUG_MSG("Object %d found\n", n);
          	    // Images are equal
     	    	// h = find(Xk == 1); Xres(h) = n;
     	    	lableImageObject<<< grid, threads >>>(ImgDevXres, ImgDevXk, ImgDevStride, n);
@@ -227,7 +227,7 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
 
     cutilCheckMsg("Kernel execution failed");
 
-    printf("Objects found                     : %d\n", (n - 1));
+    DEBUG_MSG("Objects found                     : %d\n", (n - 1));
 
     cutilSafeCall(cudaMemcpy2D(dst, Stride * sizeof(byte),
     						   ImgXres, ImgResStride * sizeof(byte),
