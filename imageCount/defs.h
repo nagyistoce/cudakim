@@ -15,6 +15,12 @@
 */
 #define BLOCK_SIZE			16
 
+// Debug messages to printf
+#define DEBUG_MSG			printf
+
+// Debug messages do nothing
+//#define DEBUG_MSG 			1 ? 0 :
+
 /**
 *  Number of images to analyze - should be equal to number of pictures to analyze
 */

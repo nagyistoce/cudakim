@@ -105,7 +105,7 @@ float ImageBackground(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int dept
     size_t DstStride;
     cudaMemcpy3DParms memcpy3DParms = {0};
 
-    printf("[ImageBackground]\n");
+    DEBUG_MSG("[ImageBackground]\n");
 
     // Create src pointer and extent
     memcpy3DParms.srcPtr = make_cudaPitchedPtr(ImgSrc, Stride, Size.width, Size.height);
@@ -114,8 +114,8 @@ float ImageBackground(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int dept
     // Allocation of memory for 3D source images in byte format
     cutilSafeCall(cudaMalloc3D(&memcpy3DParms.dstPtr, memcpy3DParms.extent));
 
-    printf("srcPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.srcPtr.pitch, memcpy3DParms.srcPtr.xsize, memcpy3DParms.srcPtr.ysize);
-    printf("dstPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.dstPtr.pitch, memcpy3DParms.dstPtr.xsize, memcpy3DParms.dstPtr.ysize);
+    DEBUG_MSG("srcPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.srcPtr.pitch, memcpy3DParms.srcPtr.xsize, memcpy3DParms.srcPtr.ysize);
+    DEBUG_MSG("dstPtr: pitch, xsize, ysize [%d,%d,%d]\n", memcpy3DParms.dstPtr.pitch, memcpy3DParms.dstPtr.xsize, memcpy3DParms.dstPtr.ysize);
 
     // Copy images to device memory
     memcpy3DParms.kind = cudaMemcpyHostToDevice;
@@ -127,8 +127,8 @@ float ImageBackground(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int dept
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid( ceil((float)Size.width / BLOCK_SIZE), ceil((float)Size.height / BLOCK_SIZE) );
 
-    printf("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    printf("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
     if (timerCUDA == 0) CreateTimer(&timerCUDA);
     RestartTimer(timerCUDA);
