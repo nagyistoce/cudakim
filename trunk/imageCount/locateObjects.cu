@@ -325,7 +325,7 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
 
     //setup execution parameters
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
+    dim3 grid( ceil((float)Size.width / BLOCK_SIZE), ceil((float)Size.height / BLOCK_SIZE) );
 
     DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
     DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);

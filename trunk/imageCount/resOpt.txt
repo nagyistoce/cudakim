@@ -1,0 +1,184 @@
+ImageCount version 1.0
+Program counting objects in series of images
+--------------------------------------------------
+Device 0: [GeForce 9400]
+  Major revision number:            1
+  Minor revision number:            1
+  Total amount of global memory:    131792896
+  Number of multiprocessors (SM):   2
+  Max. threads per multiprocessor   768
+  Max. blocks per multiprocessor    8
+  Execute multiple kernels:         no
+  Constant memory:                  65536
+  Shared memory per block:          16384
+  Registers per block:              8192
+  Warp size:                        32
+  Max. threads per block:           512
+  Max. dimension of block:          [512,512,64]
+  Max. dimension of grid:           [65535,65535,1]
+  Max. memory pitch:                2147483647
+  Texture alignment:                256
+  Clock rate:                       1100000 Hz
+  Concurrent copy and exe:          no
+
+[loadImages]
+Loading image data/E45nord1.bmp [352,288] 
+Loading image data/E45nord1.bmp [352,288] 
+Loading image data/E45nord2.bmp [352,288] 
+Loading image data/E45nord3.bmp [352,288] 
+Loading image data/E45nord4.bmp [352,288] 
+Loading image data/E45nord5.bmp [352,288] 
+Loading image data/E45nord6.bmp [352,288] 
+Loading image data/E45nord7.bmp [352,288] 
+Loading image data/E45nord8.bmp [352,288] 
+Images size [352 * 288 * 9], stride 352 
+[ImageBackground]
+srcPtr: pitch, xsize, ysize [352,352,288]
+dstPtr: pitch, xsize, ysize [512,352,288]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (ImageBackground)    : 14.244000 ms 
+Dumping background image to nordBackground.bmp...
+--------------------------------------------------
+Locating and label of objects based on background 
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.580000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 4.410000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 5
+Processing time (LabelObjects)    : 204.606003 ms 
+Dumping BW image to nordResult1.bmp...
+Dumping Label image to nordResult11.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.581000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 4.397000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 10
+Processing time (LabelObjects)    : 527.905029 ms 
+Dumping BW image to nordResult2.bmp...
+Dumping Label image to nordResult12.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.582000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 4.389000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 5
+Processing time (LabelObjects)    : 162.354996 ms 
+Dumping BW image to nordResult3.bmp...
+Dumping Label image to nordResult13.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.577000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 4.381000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 10
+Processing time (LabelObjects)    : 678.120972 ms 
+Dumping BW image to nordResult4.bmp...
+Dumping Label image to nordResult14.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.179000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 1.989000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 5
+Processing time (LabelObjects)    : 38.268002 ms 
+Dumping BW image to nordResult5.bmp...
+Dumping Label image to nordResult15.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.216000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 3.153000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 4
+Processing time (LabelObjects)    : 55.144001 ms 
+Dumping BW image to nordResult6.bmp...
+Dumping Label image to nordResult16.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.282000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 2.824000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 5
+Processing time (LabelObjects)    : 127.842003 ms 
+Dumping BW image to nordResult7.bmp...
+Dumping Label image to nordResult17.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.209000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 2.035000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 4
+Processing time (LabelObjects)    : 45.879002 ms 
+Dumping BW image to nordResult8.bmp...
+Dumping Label image to nordResult18.bmp...
+[DiffImages]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (DiffImages)      : 0.190000 ms 
+[MorphObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Processing time (MorphObjects)    : 2.057000 ms 
+[LabelObjects]
+Grid (Blocks)    [22,18]
+Threads in Block [16,16]
+Objects found                     : 3
+Processing time (LabelObjects)    : 64.095001 ms 
+Dumping BW image to nordResult9.bmp...
+Dumping Label image to nordResult19.bmp...
+Image processing time (Total)     : 1951.489746 ms 
+Image label objects time (Total)  : 1904.215088 ms 
+Processing time (Total)           : 2275.941895 ms 
+Total number of objects found     : 60 
+
+Press ENTER to exit...
