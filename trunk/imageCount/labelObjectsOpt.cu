@@ -384,14 +384,6 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
 
   		    // Xk_1 = Xk, swap pointers, instead of copy images
       	    swapPtr(&ImgDevXk1, &ImgDevXk);
-
-/* Unoptimized
-  		    // Xk_1 = Xk
-        	cutilSafeCall(cudaMemcpy2D(ImgDevXk1, ImgDevStride * sizeof(byte),
-									   ImgDevXk, ImgDevStride * sizeof(byte),
-									   Size.width * sizeof(byte), Size.height,
-									   cudaMemcpyDeviceToDevice) );
-*/
     	}
 
 		// Copy result to host
