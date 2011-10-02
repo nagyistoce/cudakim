@@ -10,5 +10,6 @@
 
 // Label objects found in image bw and stores result in dst image
 float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers);
+float TestReduceImage(byte *dst, byte *imgA, ROI Size, int Stride);
 
 #endif /* LABELOBJECTS_H_ */

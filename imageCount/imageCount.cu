@@ -52,10 +52,12 @@ static unsigned int timerTotalCUDA = 0;
 
 /* Remaining work -
 * OK - Color result images
-* OK - Update input images using matlab - remove header time
-* - Optimize labelObjects - reduction kernel
+* OK - Update input images using Matlab - remove header time
+* OK - Matlab tic toc measure time
+* Err - Optimize labelObjects - reduction kernel
 * - Run computeprof
-* - Gausian bluring of diff images
+* - Optimize dilation using tile and shared memory
+* - Gausian blurring of diff images
 * - Document results
 */
 
@@ -149,6 +151,7 @@ main( int argc, char** argv)
 
     ImgCur = ImgSrc;
     ObjectsFound = 0;
+
     for (int i = 1; i <= depth; i++)
     {
 		TimeCUDA = DiffImages(ImgDiff, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
@@ -163,6 +166,7 @@ main( int argc, char** argv)
 	    TimeTotal += TimeCUDA;
 
 	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride, &Objects);
+	    //TimeCUDA = TestReduceImage(ImgDst, ImgBW, ImgSize, ImgDstStride); // Test reduce kernel
 	    printf("Processing time (LabelObjects)    : %f ms \n", TimeCUDA);
 	    TimeTotal += TimeCUDA;
 	    TimeLableObjects += TimeCUDA;

@@ -38,7 +38,8 @@ EXECUTABLE	:= imageCount
 # Cuda source files (compiled with cudacc)
 CUFILES		:= imageCount.cu 
 CUFILES     += imageBackground.cu
-CUFILES     += labelObjects.cu
+CUFILES_sm_11 += labelObjectsOpt.cu
+#CUFILES     += labelObjects.cu
 CUFILES     += locateObjects.cu
 CUFILES		+= imageThrust.cu
 CUFILES		+= deviceUtil.cu
