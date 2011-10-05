@@ -1,6 +1,9 @@
 /*
  * imageBackground.cu
  *
+ * Finding background in a series of images in 3D, where the z-dimension is the time
+ * the background image is found computing the median of the pixel intensity in the z-dimension
+ *
  *  Created on: 26/09/2011
  *      Author: kimbjerge
  */
@@ -28,7 +31,6 @@ test3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, in
 	  byte* imgPtr = (byte *)devPitchedPtr.ptr;
 	  size_t pitch = devPitchedPtr.pitch;
 	  size_t slicePitch = pitch * height;
-	  //float sum = 0;
 	  imgPtr += slicePitch*8;
 
 	  byte cp = imgPtr[rowIdx * pitch + colIdx];
@@ -91,7 +93,7 @@ median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, 
 		  median[z] = row[colIdx];
 	  }
 
-	  //insertionsort(median, depth); // NOT WORKING ON MINIMAC
+	  //insertionsort(median, depth); // NOT WORKING ON MAC MINI
 	  bublesort(median, depth);
 
 	  // Update average of images

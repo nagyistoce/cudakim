@@ -1,5 +1,10 @@
 /*
- * labelObjects.cu
+ * labelObjectsOpt.cu
+ *
+ * Finds connected components in binary (BW) image
+ * using 8 or 4 neighbor pixels
+ *
+ * Optimized version
  *
  *  Created on: 26/09/2011
  *      Author: kimbjerge
@@ -91,8 +96,9 @@ dilate4IntersectionImageByte(byte* dst, byte* src, byte *org, int width)
   dst[row * width + col] = res & org[row * width + col];
 }
 
+// NOT USED
 __global__ void
-diffImageReduction( byte* dst, byte* xk, byte *xk1, int stride)
+diffImageSimple( byte* dst, byte* xk, byte *xk1, int stride)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -101,6 +107,17 @@ diffImageReduction( byte* dst, byte* xk, byte *xk1, int stride)
 
 }
 
+__global__ void
+compareImageSimple( byte* dst, byte* xk, byte *xk1, int stride)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (abs(xk[row * stride + col] - xk1[row * stride + col]) > 0)
+	  dst[0] = 255;
+}
+
+// NOT USED for test only
 __global__ void
 diffImageReductionOpt( byte* dst, byte* xk, byte *xk1, int stride)
 {
@@ -136,7 +153,7 @@ diffImageReductionOpt( byte* dst, byte* xk, byte *xk1, int stride)
   if (tx == 0 & ty == 0)
   {
 	 // Atomic increment for thread (0,0) in any block
-     atomicAdd(&reducedBlockCount, 1);
+     //atomicAdd(&reducedBlockCount, 1);
 
      // The last block sums the results of all other blocks
      if( reducedBlockCount == (gridDim.x * gridDim.y) )
@@ -186,22 +203,6 @@ static bool findPoint(byte *img, ROI Size, int Stride, byte val, POINT *point)
 	return found;
 }
 
-static bool isImageBlank(byte *img, ROI Size, int Stride)
-{
-	bool blank = true;
-
-	// Search white pixel part of image
-	for (int x = 0; x < Size.height; x++) {
-		for (int y = 0; y < Size.width; y++) {
-			if (img[x*Stride + y] > 0) {
-				blank = false;
-				break;
-			}
-		}
-	}
-	return blank;
-}
-
 inline void swapPtr(byte **p1, byte **p2)
 {
 	byte *tmp = *p1;
@@ -209,6 +210,7 @@ inline void swapPtr(byte **p1, byte **p2)
 	*p2 = tmp;
 }
 
+// NOT USED for test only
 float TestReduceImage(byte *dst, byte *imgA, ROI Size, int Stride)
 {
 	int ImgResStride;
@@ -282,7 +284,7 @@ float TestReduceImage(byte *dst, byte *imgA, ROI Size, int Stride)
 
 }
 
-float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
+float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers, int neighbors)
 {
 	int n = 1;
 	POINT point;
@@ -350,28 +352,17 @@ float LabelObjects(byte *dst, byte *bw, ROI Size, int Stride, int *Numbers)
     	{
     		// Dilate image anded with original
     		// Xk = imdilate(Xk_1, B) & A
-    		dilate4IntersectionImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
+    		if (neighbors == 8)
+    			dilate8IntersectionImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
+    		else
+    			dilate4IntersectionImageByte<<< grid, threads >>>(ImgDevXk, ImgDevXk1, ImgDevA, ImgDevStride);
 
-#if 1 // Unoptimized
-    		// Compare if image are equal DiffBWImg(Xk, Xk_1) == 1 - reduced version kbe???
-    		diffImageReduction<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
-     		// Copy difference of images
-    	    cutilSafeCall(cudaMemcpy2D(ImgTmp, ImgResStride * sizeof(byte),
-    	    						   ImgDevTmp, ImgDevStride * sizeof(byte),
-    	                               Size.width * sizeof(byte), Size.height,
-    	                               cudaMemcpyDeviceToHost) );
+       		//diffImageReductionOpt<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
+            cutilSafeCall(cudaMemset2D(ImgDevTmp, ImgDevStride, 0, 4, 1));
+    		compareImageSimple<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
+    	    cutilSafeCall(cudaMemcpy(ImgTmp, ImgDevTmp, 4, cudaMemcpyDeviceToHost));
 
-    	    if (isImageBlank(ImgTmp, Size, Stride))
-#else // Optimized
-
-    		diffImageReductionOpt<<< grid, threads >>>(ImgDevTmp, ImgDevXk, ImgDevXk1, ImgDevStride);
-    	    //cutilSafeCall(cudaMemcpy(ImgTmp, ImgDevTmp, 4, cudaMemcpyDeviceToHost));
-    	    cutilSafeCall(cudaMemcpy2D(ImgTmp, ImgResStride * sizeof(byte),
-    	    						   ImgDevTmp, ImgDevStride * sizeof(byte),
-    	                               Size.width * sizeof(byte), Size.height,
-    	                               cudaMemcpyDeviceToHost) );
       	    if (*ImgTmp == 0)
-#endif
       	    {
 
     	    	//DEBUG_MSG("Object %d found\n", n);

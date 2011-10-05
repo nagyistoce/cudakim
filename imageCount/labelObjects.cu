@@ -1,6 +1,9 @@
 /*
  * labelObjects.cu
  *
+ * Finds connected components in binary (BW) image
+ * using 4 neighbor pixels
+ *
  *  Created on: 26/09/2011
  *      Author: kimbjerge
  */

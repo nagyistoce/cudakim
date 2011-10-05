@@ -1,29 +1,16 @@
 /*
- * Copyright 1993-2010 NVIDIA Corporation.  All rights reserved.
+ * This program counts objects in a series of images
+ * the algorithm reads 9 images specified by ImageFName
+ * the background is extracted and moving objects are
+ * isolated, located and labeled.
  *
- * Please refer to the NVIDIA end user license agreement (EULA) associated
- * with this source code for terms and conditions that govern your use of
- * this software. Any use, reproduction, disclosure, or distribution of
- * this software and related documentation outside the terms of the EULA
- * is strictly prohibited.
+ * The resulting images are colored and stored in 9 files.
  *
- */
- 
- /*
-* Copyright 1993-2010 NVIDIA Corporation.  All rights reserved.
-*
-* Please refer to the NVIDIA end user license agreement (EULA) associated
-* with this source code for terms and conditions that govern your use of
-* this software. Any use, reproduction, disclosure, or distribution of
-* this software and related documentation outside the terms of the EULA
-* is strictly prohibited.
-*
-*/
-
-/* This sample is a templatized version of the template project.
-* It also shows how to correctly templatize dynamically allocated shared
-* memory arrays.
-* Host code.
+ * The background image is stored in: BackImageFname
+ * The result image is stored in: TestImageFname
+ *
+ *  Created on: 26/09/2011
+ *      Author: kimbjerge
 */
 
 // includes, system
@@ -50,15 +37,17 @@
 
 static unsigned int timerTotalCUDA = 0;
 
-/* Remaining work -
+/* Remaining work list:
+*
 * OK - Color result images
 * OK - Update input images using Matlab - remove header time
 * OK - Matlab tic toc measure time
-* Err - Optimize labelObjects - reduction kernel
-* - Run computeprof
+* OK - Optimize labelObjects - reduction kernel (Err)
+* OK - Run computeprof
+*
+* - Using ideas from guest lecture Allan Rasmusson, connected components analysis
 * - Optimize dilation using tile and shared memory
-* - Gausian blurring of diff images
-* - Document results
+* - Gausian blurring of foreground images
 */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +57,7 @@ int
 main( int argc, char** argv) 
 {
 	byte *ImgSrc, *ImgDst, *ImgDiff, *ImgBW, *ImgBack, *ImgCur;
-	ROI ImgSize; // ImgBackSize;
+	ROI ImgSize;
 	int ImgSrcStride, ImgDstStride, ImgBackStride, ImgBWStride;
     int devID;
     int depth = DEPTH;
@@ -78,13 +67,11 @@ main( int argc, char** argv)
     char ImageName[50];
     int ObjectsFound, Objects;
 
-    //char ImageFname[] = "rice.bmp";
-    //char ImageBackFname[] = "nordBack.bmp";
     char ImageFname[] = "data/E45nord%d.bmp";
     char BackImageFname[] = "nordBackground.bmp";
     char TestImageFname[] = "nordResult%d.bmp";
 
-    printf("ImageCount version 1.0\n");
+    printf("ImageCount version 1.1\n");
     printf("Program counting objects in series of images\n");
     printf("--------------------------------------------------\n");
 
@@ -118,7 +105,6 @@ main( int argc, char** argv)
 
     ImgBack = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBackStride);
 
-    //printf("Image src stride %d\n", ImgSrcStride);
     TimeCUDA = ImageBackground(ImgBack, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
     TimeTotal += TimeCUDA;
@@ -128,18 +114,6 @@ main( int argc, char** argv)
     printf("Dumping background image to %s...\n", BackImageFname);
     DumpBmpAsGray(BackImageFname, ImgBack, ImgBackStride, ImgSize);
     //------------------------------------------------------------------------------------------
-
-    /*
-    printf("--------------------------------------------------\n");
-    // Testing of diff background with images
-    // Load image and allocate memory
-    if (loadImage(ImageBackFname, argv[0], &ImgBack, &ImgBackSize, &ImgBackStride))
-    {
-        //finalize
-        cutilExit(argc, argv);
-        return 1;
-    }
-    */
 
     // Allocate images
     ImgDst = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDstStride);
@@ -155,6 +129,7 @@ main( int argc, char** argv)
     for (int i = 1; i <= depth; i++)
     {
 		TimeCUDA = DiffImages(ImgDiff, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
+		// Experimental implementation of diff images using thrust
 		//TimeCUDA = ThrustImageDiff(ImgDst, ImgBack, ImgCur, ImgSize, ImgSrcStride, ImgBackStride);
 		printf("Processing time (DiffImages)      : %f ms \n", TimeCUDA);
 	    TimeTotal += TimeCUDA;
@@ -165,7 +140,7 @@ main( int argc, char** argv)
 	    printf("Processing time (MorphObjects)    : %f ms \n", TimeCUDA);
 	    TimeTotal += TimeCUDA;
 
-	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride, &Objects);
+	    TimeCUDA = LabelObjects(ImgDst, ImgBW, ImgSize, ImgDstStride, &Objects, 8); // Using 8 or 4 connected neighbors
 	    //TimeCUDA = TestReduceImage(ImgDst, ImgBW, ImgSize, ImgDstStride); // Test reduce kernel
 	    printf("Processing time (LabelObjects)    : %f ms \n", TimeCUDA);
 	    TimeTotal += TimeCUDA;

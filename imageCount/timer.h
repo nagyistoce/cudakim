@@ -1,6 +1,9 @@
 /*
  * timer.c
  *
+ * Functions used to compute computation time
+ * calculates the average time on 8 measurements
+ *
  *  Created on: 07/09/2011
  *      Author: kimbjerge
  */
@@ -25,14 +28,12 @@ void inline CreateTimer(unsigned int *timer)
 
 void inline StartTimer(unsigned int timer)
 {
-    //cudaThreadSynchronize();
     cutilSafeCall(cudaThreadSynchronize());
     cutilCheckError(cutStartTimer(timer));
 }
 
 void inline StopTimer(unsigned int timer)
 {
-    //cudaThreadSynchronize();
     cutilSafeCall(cudaThreadSynchronize());
     cutilCheckError(cutStopTimer(timer));
     if (idx < WINDOW)
