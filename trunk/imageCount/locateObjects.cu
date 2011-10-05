@@ -1,6 +1,11 @@
 /*
  * locateObjects.cu
  *
+ * Contains functions to isolate and locate foreground objects in image.
+ * Includes functions to compute difference between images,
+ * static image thresholding to produce a binary BW image,
+ * performing morphological image operations like erode and dilate on BW images
+ *
  *  Created on: 26/09/2011
  *      Author: kimbjerge
  */
@@ -31,46 +36,6 @@ diffImageByte( byte* diff, byte* back, byte* src, int stride)
 }
 
 __global__ void
-diffImageFloat( float *diff, float* dst, float* src, int width)
-{
-  int row = blockIdx.y * blockDim.y + threadIdx.y;
-  int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-  diff[row * width + col] = abs(src[row * width + col] - dst[row * width + col]);
-
-}
-
-__global__ void
-erodeImageFloat( float* dst, float* src, int width)
-{
-  int row = blockIdx.y * blockDim.y + threadIdx.y;
-  int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-  // read in input data from global memory
-  // Structuring element
-  /*
-  float pix01 = (row > 0 ? src[(row - 1) * width + col] : 0);
-  float pix10 = (col > 0 ? src[row * width + col - 1] : 0);
-  float pix11 = src[row * width + col];
-  float pix12 = (col < width - 1 ? src[row * width + col + 1] : 0);
-  float pix21 = (row < height - 1 ? src[(row + 1) * width + col] : 0);
-  */
-  float pix01 = src[(row - 1) * width + col];
-  float pix10 = src[row * width + col - 1];
-  float pix11 = src[row * width + col];
-  float pix12 = src[row * width + col + 1];
-  float pix21 = src[(row + 1) * width + col];
-
-  // Erode morphological operation
-  float sum = pix01 + pix10 + pix11 + pix12 + pix21;
-  if (sum < 255.0f*5) sum = 0;
-  else sum = 255.0f;
-
-  dst[row * width + col] = sum;
-
-}
-
-__global__ void
 erodeImageByte( byte* dst, byte* src, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -95,34 +60,7 @@ erodeImageByte( byte* dst, byte* src, int width)
 }
 
 __global__ void
-dilateImageFloat( float* dst, float* src, int width)
-{
-  int row = blockIdx.y * blockDim.y + threadIdx.y;
-  int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-  float pix01 = src[(row - 1) * width + col];
-  float pix10 = src[row * width + col - 1];
-  float pix11 = src[row * width + col];
-  float pix12 = src[row * width + col + 1];
-  float pix21 = src[(row + 1) * width + col];
-
-  // Dilate morphological operation
-  if ( (pix01 >= 255.0f) |
-       (pix10 >= 255.0f) |
-       (pix12 >= 255.0f) |
-       (pix21 >= 255.0f) )
-  {
-	  dst[row * width + col] = 255.0f;
-  }
-  else
-  {
-	  dst[row * width + col] = pix11;
-  }
-
-}
-
-__global__ void
-dilateImageByte( byte* dst, byte* src, int width)
+dilate3SEImageByte( byte* dst, byte* src, int width)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -186,19 +124,6 @@ dilate5SEImageByte( byte* dst, byte* src, int width)
 }
 
 __global__ void
-tresholdImageFloat( float* dst, float* src, int width, int th)
-{
-  int row = blockIdx.y * blockDim.y + threadIdx.y;
-  int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (src[row * width + col] > th)
-  	dst[row * width + col] = 255.0f;
-  else
-  	dst[row * width + col] = 0;
-
-}
-
-__global__ void
 tresholdImageByte( byte* dst, byte* src, int strideDst, int strideSrc, byte th)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -208,16 +133,6 @@ tresholdImageByte( byte* dst, byte* src, int strideDst, int strideSrc, byte th)
   	dst[row * strideDst + col] = 255;
   else
   	dst[row * strideDst + col] = 0;
-
-}
-
-__global__ void
-copyImageFloat( float* dst, float* src, int width)
-{
-  int row = blockIdx.y * blockDim.y + threadIdx.y;
-  int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-  dst[row * width + col] = src[row * width + col];
 
 }
 
@@ -340,8 +255,9 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
 
     // Erode image with structuring element
     erodeImageByte<<< grid, threads >>>(Dst1b, DstBWb, DstStride);
+
     // Dilate image with structuring element
-    //dilateImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
+    //dilate3SEImageByte<<< grid, threads >>>(Dst2, Dst1, DstStride);
     dilate5SEImageByte<<< grid, threads >>>(Dst2b, Dst1b, DstStride);
 
     StopTimer(timerCUDA);
@@ -363,98 +279,3 @@ float MorphObjects(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
     //return time taken by the operation
     return GetTimer(timerCUDA);
 }
-
-// Performs thresholding and morphological operations like dilation and erode of image
-// Converts to floating point format before
-float MorphObjectsFloat(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride)
-{
-    float *Dst, *DstBW, *Src, *Diff;
-    size_t DstStride, SrcStride, DiffStride;
-
-    DEBUG_MSG("[MorphObjectsFloat]\n");
-
-    //convert source image to float representation
-    int ImgSrcFStride;
-    float *ImgSrcF = MallocPlaneFloat(Size.width, Size.height, &ImgSrcFStride);
-    CopyByte2Float(ImgSrc, Stride, ImgSrcF, ImgSrcFStride, Size);
-
-    // Allocation of memory for 2D source image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&Src), &SrcStride, Size.width * sizeof(float), Size.height));
-    SrcStride /= sizeof(float);
-    //DEBUG_MSG("SrcStride %d\n", SrcStride);
-
-    //copy source image from host memory to device
-    cutilSafeCall(cudaMemcpy2D(Src, SrcStride * sizeof(float),
-                               ImgSrcF, ImgSrcFStride * sizeof(float),
-                               Size.width * sizeof(float), Size.height,
-                               cudaMemcpyHostToDevice) );
-
-    // Allocation of device memory for 2D destination image in single precision format
-    cutilSafeCall(cudaMallocPitch((void **)(&DstBW), &DstStride, Size.width * sizeof(float), Size.height));
-    cutilSafeCall(cudaMallocPitch((void **)(&Dst), &DstStride, Size.width * sizeof(float), Size.height));
-    DstStride /= sizeof(float);
-
-    cutilSafeCall(cudaMallocPitch((void **)(&Diff), &DiffStride, Size.width * sizeof(float), Size.height));
-    DiffStride /= sizeof(float);
-
-    //setup execution parameters
-    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid(Size.width / BLOCK_SIZE, Size.height / BLOCK_SIZE);
-
-    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
-
-    //create and start CUDA timer
-    if (timerCUDA == 0) CreateTimer(&timerCUDA);
-    RestartTimer(timerCUDA);
-
-    //copy image from device memory to device memory
-    /*
-    cutilSafeCall(cudaMemcpy2D(Dst, DstStride * sizeof(float),
-                                Src, SrcStride * sizeof(float),
-                                Size.width * sizeof(float), Size.height,
-                                cudaMemcpyDeviceToDevice) );
-
-    copyImage<<< grid, threads >>>(Dst, Src, Size.width);
-    */
-
-    // Generate BW image
-    //tresholdImage<<< grid, threads >>>(DstBW, Src, Size.width, 110);
-    tresholdImageFloat<<< grid, threads >>>(DstBW, Src, DstStride, 15);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    // Erode image with structuring element
-    erodeImageFloat<<< grid, threads >>>(Dst, DstBW, DstStride);
-    // Dilate image with structuring element
-    dilateImageFloat<<< grid, threads >>>(Diff, Dst, DstStride);
-    //dilateImage<<< grid, threads >>>(Diff, DstBW, DstStride);
-    cutilSafeCall(cudaThreadSynchronize());
-
-    // Diff BW and eroded image
-    //diffImageFloat<<< grid, threads >>>(Diff, DstBW, Dst, Size.width);
-    //cutilSafeCall(cudaThreadSynchronize());
-
-    StopTimer(timerCUDA);
-
-    cutilCheckMsg("Kernel execution failed");
-
-    //copy eroded image from device memory to host memory in Src
-    cutilSafeCall(cudaMemcpy2D(ImgSrcF, ImgSrcFStride * sizeof(float),
-                                Diff, DiffStride * sizeof(float),
-                                Size.width * sizeof(float), Size.height,
-                                cudaMemcpyDeviceToHost) );
-
-    CopyFloat2Byte(ImgSrcF, ImgSrcFStride, ImgDst, Stride, Size);
-
-    //clean up memory
-    cutilSafeCall(cudaFree(Src));
-    cutilSafeCall(cudaFree(Dst));
-    cutilSafeCall(cudaFree(DstBW));
-    cutilSafeCall(cudaFree(Diff));
-    FreePlane(ImgSrcF);
-
-    //return time taken by the operation
-    return GetTimer(timerCUDA);
-}
-
-
