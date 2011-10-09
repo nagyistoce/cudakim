@@ -85,7 +85,6 @@ median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, 
 	  size_t slicePitch = pitch * height;
 	  byte median[DEPTH];
 
-	  // Average of all images
 	  for (int z = 0; z < depth; ++z)
 	  {
 		  byte *slice = imgPtr + z * slicePitch; // Find sliced image
@@ -96,7 +95,6 @@ median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, 
 	  //insertionsort(median, depth); // NOT WORKING ON MAC MINI
 	  bublesort(median, depth);
 
-	  // Update average of images
 	  dst[rowIdx * stride + colIdx] = median[(DEPTH+1)/2];
 }
 
