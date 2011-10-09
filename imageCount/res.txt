@@ -32,6 +32,27 @@ ptxas info    : Used 8 registers, 44 bytes cmem[0]
 ptxas info    : Compiling entry function '_Z13diffImageBytePhS_S_i' for 'sm_20'
 ptxas info    : Used 5 registers, 48 bytes cmem[0]
 ptxas info    : Compiling entry function 
+ptxas info    : Compiling entry function '_Z16lableImageObjectPhS_ih' for 'sm_11'
+ptxas info    : Used 5 registers, 13+16 bytes smem, 4 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z21diffImageReductionOptPhS_S_i' for 'sm_11'
+ptxas info    : Used 11 registers, 272+16 bytes smem, 8 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z18compareImageSimplePhS_S_i' for 'sm_11'
+ptxas info    : Used 5 registers, 16+16 bytes smem, 4 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z15diffImageSimplePhS_S_i' for 'sm_11'
+ptxas info    : Used 5 registers, 16+16 bytes smem, 4 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z28dilate4IntersectionImageBytePhS_S_i' for 'sm_11'
+ptxas info    : Used 9 registers, 16+16 bytes smem, 8 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z28dilate8IntersectionImageBytePhS_S_i' for 'sm_11'
+ptxas info    : Used 9 registers, 16+16 bytes smem, 8 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z12setImageBytePhiiih' for 'sm_11'
+ptxas info    : Used 4 registers, 17+16 bytes smem, 4 bytes cmem[1], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z16lableImageObjectPhS_ih' for 'sm_20'
+ptxas info    : Used 5 registers, 45 bytes cmem[0], 4 bytes cmem[14], 4 bytes cmem[16]
+ptxas info    : Compiling entry function '_Z21diffImageReductionOptPhS_S_i' for 'sm_20'
+ptxas info    : Used 11 registers, 256+0 bytes smem, 48 bytes cmem[0], 4 bytes cmem[14]
+ptxas info    : Compiling entry function '_Z18compareImageSimplePhS_S_i' for 'sm_20'
+ptxas info    : Used 5 registers, 48 bytes cmem[0], 4 bytes cmem[14]
+
 
 ImageCount version 1.0
 Program counting objects in series of images
