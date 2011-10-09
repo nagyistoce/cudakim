@@ -8,7 +8,7 @@ Intel Core 2 Duo
 1.80Ghz
 Matlab R2010b
 
-- Alogrithm using adaptive thresholding
+- Alogrithm using global thresholding
 
 Number of cars in all images:  60
 Elapsed time is 5.547905 seconds.
