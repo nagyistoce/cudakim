@@ -35,7 +35,8 @@
 
 // Settings for computing disparity
 #define DEFAULT_WINDOW_SIZE    11
-#define DEFAULT_TX_WINDOW_SIZE 5
+#define DEFAULT_TX_WINDOW_SIZE 5 // Census window size
+//#define DEFAULT_TX_WINDOW_SIZE 7
 #define DEFAULT_MAX_DISPARITY  100
 #define DEFAULT_MIN_DISPARITY  0
 #define MIN_ALLOWED_DISPARITY  -128
