@@ -1,8 +1,8 @@
 /*
- * imageBackground.cu
+ * CensusDisparity.cu
  *
- * Finding background in a series of images in 3D, where the z-dimension is the time
- * the background image is found computing the median of the pixel intensity in the z-dimension
+ * Computes the depth map based on the census algorithm
+ * input is the left and right stereo image in BW
  *
  *  Created on: 26/09/2011
  *      Author: kimbjerge
@@ -24,37 +24,25 @@
 static unsigned int timerCUDA = 0;
 
 __global__ static void
-test3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
+average3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, int height, int depth)
 {
 	  int rowIdx = blockIdx.y * blockDim.y + threadIdx.y;
 	  int colIdx = blockIdx.x * blockDim.x + threadIdx.x;
 	  byte* imgPtr = (byte *)devPitchedPtr.ptr;
 	  size_t pitch = devPitchedPtr.pitch;
 	  size_t slicePitch = pitch * height;
-	  imgPtr += slicePitch*8;
+	  byte pixel[DEPTH];
 
-	  byte cp = imgPtr[rowIdx * pitch + colIdx];
+	  for (int z = 0; z < depth; ++z)
+	  {
+		  byte *slice = imgPtr + z * slicePitch; // Find sliced image
+		  byte *row = slice + rowIdx * pitch; // Find row in image
+		  pixel[z] = row[colIdx]; // Create array with pixel in both images
+	  }
 
-	  // Update average of images
-	  dst[rowIdx * stride + colIdx] = cp;
-}
-
-// Sorts an array a of length depth
-__device__ static void insertionsort(byte *a, int depth)
-{
-	int i, j;
-	byte t;
-	for (i=1; i < depth; i++)
-	{
-		t = a[i];
-		j = i-1;
-		while(t < a[j] && j >= 0)
-		{
-			a[j+1] = a[j];
-			j = j-1;
-		}
-		a[j+1] = t;
-	}
+	  // Update average of stereo images
+	  dst[rowIdx * stride + colIdx] = (pixel[0] + pixel[1])/2;
+	  //dst[rowIdx * stride + colIdx] = pixel[1]; // 0 = left image, 1 = rigth image
 }
 
 __device__ static void swap (byte *x, byte *y)
@@ -92,20 +80,20 @@ median3DImages (byte* dst, int stride, cudaPitchedPtr devPitchedPtr, int width, 
 		  median[z] = row[colIdx];
 	  }
 
-	  //insertionsort(median, depth); // NOT WORKING ON MAC MINI
 	  bublesort(median, depth);
 
 	  dst[rowIdx * stride + colIdx] = median[(DEPTH+1)/2];
 }
 
-// Find background image based on 3D cube of images
-float ImageBackground(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int depth)
+// Find depth map image based on 3D cube of images representing left and right images
+float CensusDisparity(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int depth,
+		              int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity)
 {
     byte *Dst;
     size_t DstStride;
     cudaMemcpy3DParms memcpy3DParms = {0};
 
-    DEBUG_MSG("[ImageBackground]\n");
+    DEBUG_MSG("[CensusDisparity]\n");
 
     // Create src pointer and extent
     memcpy3DParms.srcPtr = make_cudaPitchedPtr(ImgSrc, Stride, Size.width, Size.height);
@@ -133,8 +121,8 @@ float ImageBackground(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int dept
     if (timerCUDA == 0) CreateTimer(&timerCUDA);
     RestartTimer(timerCUDA);
 
-    median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
-    //test3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
+    //median3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
+    average3DImages<<< grid, threads >>>(Dst, DstStride, memcpy3DParms.dstPtr, Size.width, Size.height, depth);
 
     StopTimer(timerCUDA);
 
@@ -149,3 +137,6 @@ float ImageBackground(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int dept
 
     return GetTimer(timerCUDA);;
 }
+
+
+

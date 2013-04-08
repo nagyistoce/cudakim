@@ -39,10 +39,12 @@ EXECUTABLE	:= stereoVision
 CUFILES		:= stereoVision.cu 
 CUFILES     += imageBackground.cu
 CUFILES		+= deviceUtil.cu
+CUFILES     += censusDisparity.cu
 
 # C/C++ source files (compiled with gcc / c++)
 CCFILES     := imageLoader.cpp 
 CCFILES		+= BmpUtil.cpp
+CCFILES     += CENSUS.cpp
 
 ################################################################################
 # Rules and targets

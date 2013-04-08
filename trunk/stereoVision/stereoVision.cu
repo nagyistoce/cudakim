@@ -31,21 +31,24 @@
 
 // includes, kernels and functions
 #include "imageBackground.h"
+#include "censusDisparity.h"
+
+// Settings for computing disparity
+#define DEFAULT_WINDOW_SIZE    11
+#define DEFAULT_TX_WINDOW_SIZE 5
+#define DEFAULT_MAX_DISPARITY  100
+#define DEFAULT_MIN_DISPARITY  0
+#define MIN_ALLOWED_DISPARITY  -128
+#define MAX_ALLOWED_DISPARITY  127
 
 static unsigned int timerTotalCUDA = 0;
 
 /* Remaining work list:
 *
-* OK - Color result images
-* OK - Update input images using Matlab - remove header time
-* OK - Matlab tic toc measure time
-* OK - Optimize labelObjects - reduction kernel (Err)
-* OK - Run computeprof
-*
-* - Using ideas from guest lecture Allan Rasmusson, connected components analysis
-* - Optimize dilation using tile and shared memory
 * - Gausian blurring of foreground images
 */
+void CENSUS_RIGHT (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array, int width, int height,
+		           int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
@@ -53,9 +56,11 @@ static unsigned int timerTotalCUDA = 0;
 int
 main( int argc, char** argv) 
 {
-	byte *ImgSrc, *ImgDst, *ImgDiff, *ImgBW, *ImgBack, *ImgCur;
+	byte *ImgSrc, *ImgDst, *ImgDiff, *ImgBW, *ImgBack, *ImgRight, *ImgDepth;
+	signed char *ImgDepthRef;
+  	double *scores;
 	ROI ImgSize;
-	int ImgSrcStride, ImgDstStride, ImgBackStride, ImgBWStride;
+	int ImgSrcStride, ImgDstStride, ImgBackStride, ImgDepthStride, ImgBWStride;
     int devID;
     int depth = DEPTH;
     float TimeCUDA;
@@ -64,9 +69,14 @@ main( int argc, char** argv)
     char ImageName[50];
     int ObjectsFound, Objects;
 
-    char ImageFname[] = "data/Bowling-%d.bmp";
-    char BackImageFname[] = "bowlingBackground.bmp";
-    char TestImageFname[] = "bowlingResult%d.bmp";
+    char ImageFname[] = "data/BowlingC-%d.bmp";
+    //char ImageFname[] = "data/E45Nord%d.bmp";
+    char ImageLeftBWFname[] = "imageLeftBW.bmp";
+    char ImageRightBWFname[] = "imageRightBW.bmp";
+    char DepthMapFname[] = "imageDepthMap.bmp";
+    char DepthMapRefFname[] = "imageDepthMapRef.bmp";
+    char BackImageFname[] = "imageBackground.bmp";
+    char TestImageFname[] = "imageResult%d.bmp";
 
     printf("StereoVision version 1.0\n");
     printf("Program performs depth map computation based on stereo images\n");
@@ -96,20 +106,61 @@ main( int argc, char** argv)
         return 1;
     }
     
+    // Save left and right BW image in files
+    printf("Dumping left and right BW images to %s, %s...\n", ImageLeftBWFname, ImageRightBWFname);
+    DumpBmpAsGray(ImageLeftBWFname, ImgSrc, ImgSrcStride, ImgSize);
+    ImgRight = NextImage(ImgSrc, ImgSrcStride, ImgSize);
+    DumpBmpAsGray(ImageRightBWFname, ImgRight, ImgSrcStride, ImgSize);
+
     // Initialize timer
     CreateTimer(&timerTotalCUDA);
     StartTimer(timerTotalCUDA);
 
+    //------------------------------------------------------------------------------------------
+    // Background processing using median filtering
+    //------------------------------------------------------------------------------------------
     ImgBack = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgBackStride);
 
     TimeCUDA = ImageBackground(ImgBack, ImgSrc, ImgSize, ImgSrcStride, depth);
     printf("Processing time (ImageBackground)    : %f ms \n", TimeCUDA);
     TimeTotal += TimeCUDA;
-
     // Save temporary background image in file
-    //Dump result of finding background image
-    printf("Dumping background image to %s...\n", BackImageFname);
+    // Dump result of finding background image
     DumpBmpAsGray(BackImageFname, ImgBack, ImgBackStride, ImgSize);
+
+    //------------------------------------------------------------------------------------------
+    // Stereo depth map processing using Census transformation in computing disparities
+    //------------------------------------------------------------------------------------------
+    {
+    int max_disparity = DEFAULT_MAX_DISPARITY, min_disparity = DEFAULT_MIN_DISPARITY,
+      x_window_size = DEFAULT_WINDOW_SIZE, y_window_size = DEFAULT_WINDOW_SIZE,
+      x_tx_win_size = DEFAULT_TX_WINDOW_SIZE, y_tx_win_size = DEFAULT_TX_WINDOW_SIZE;
+
+    ImgDepthRef = (signed char *)MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDepthStride);
+    ImgDepth = MallocPlaneByte(ImgSize.width, ImgSize.height, &ImgDepthStride);
+
+    TimeCUDA = CensusDisparity(ImgDepth, ImgSrc, ImgSize, ImgDepthStride, depth,
+    		                   x_tx_win_size, y_tx_win_size, x_window_size, y_window_size, min_disparity, max_disparity);
+    printf("Processing time (Census depth map)    : %f ms \n", TimeCUDA);
+    TimeTotal += TimeCUDA;
+    // Save depth map image in file
+    // Dump result of finding stereo depth map
+    DumpBmpAsGray(DepthMapFname, ImgDepth, ImgDepthStride, ImgSize);
+
+    // Create depth map using host processor as reference
+    if ((scores = (double*) calloc (ImgSize.width * ImgSize.height, sizeof(double))) == NULL) {
+        //finalize
+        cutilExit(argc, argv);
+        return 1;
+    }
+
+    CENSUS_RIGHT(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
+     		     x_tx_win_size, y_tx_win_size, x_window_size, y_window_size, min_disparity, max_disparity);
+
+    DumpBmpAsGrayOffset(DepthMapRefFname, ImgDepthRef, ImgDepthStride, ImgSize, min_disparity);
+
+    }
+
     //------------------------------------------------------------------------------------------
 /*
     // Allocate images
@@ -160,7 +211,7 @@ main( int argc, char** argv)
     StopTimer(timerTotalCUDA);
     float time = GetTimer(timerTotalCUDA);
     printf("Image processing time (Total)     : %f ms \n", TimeTotal);
-    printf("Image label objects time (Total)  : %f ms \n", TimeLableObjects);
+    //printf("Image label objects time (Total)  : %f ms \n", TimeLableObjects);
     printf("Processing time (Total)           : %f ms \n", time);
 
     //printf("Total number of objects found     : %d \n", ObjectsFound);
@@ -168,6 +219,10 @@ main( int argc, char** argv)
     //release byte planes
     FreePlane(ImgSrc);
  	FreePlane(ImgBack);
+ 	FreePlane(ImgDepth);
+ 	FreePlane(ImgDepthRef);
+    free (scores);
+
  /*
     FreePlane(ImgDst);
     FreePlane(ImgDiff);
