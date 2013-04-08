@@ -94,6 +94,112 @@ static void census_transform (unsigned char *image, int x_window_size, int y_win
   } /* for */
 } /* census_transform */
 
+__global__ void
+erodeImageByte( byte* dst, byte* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // read in input data from global memory
+  // Structuring element
+  byte pix01 = src[(row - 1) * width + col];
+  byte pix10 = src[row * width + col - 1];
+  byte pix11 = src[row * width + col];
+  byte pix12 = src[row * width + col + 1];
+  byte pix21 = src[(row + 1) * width + col];
+
+  // Erode morphological operation
+  float sum = pix01 + pix10 + pix11 + pix12 + pix21;
+  byte pixel = 255;
+  if (sum < 255.0f*5)
+	  pixel = 0;
+
+  dst[row * width + col] = pixel;
+
+}
+
+__global__ void
+transformImageByte( long int* census, byte* src, int width)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // read in input data from global memory
+  // Structuring element
+  byte pix01 = src[(row - 1) * width + col];
+  byte pix10 = src[row * width + col - 1];
+  byte pix11 = src[row * width + col];
+  byte pix12 = src[row * width + col + 1];
+  byte pix21 = src[(row + 1) * width + col];
+
+  // Erode morphological operation
+  float sum = pix01 + pix10 + pix11 + pix12 + pix21;
+  byte pixel = 255;
+  if (sum < 255.0f*5)
+	  pixel = 0;
+
+  census[row * width + col] = pixel;
+
+}
+
+#define BUFF_SIZE (num_buffs * sizeof(long int))
+#define PIXEL_SIZE sizeof(byte)
+#define BOARDER_SIZE		4 // Additional boarder added to image for census transform
+#define ADD_BOARDER(ptr, stride) (ptr + stride*BOARDER_SIZE*BUFF_SIZE + BOARDER_SIZE*BUFF_SIZE);
+
+static float census_transform_cuda (unsigned char *image, int x_window_size, int y_window_size, int width, int height,
+		                            int num_buffs, int size_buff, long int *census_tx)
+{
+    byte  *CensusTrans, *SrcImg, *CensusTransB;
+    size_t SrcStride, CensusStride;
+    ROI SB; // Size of image with and without black boarder
+
+    SB.width = width + BOARDER_SIZE*2; // Add black boarders to allocated device image memory buffers
+    SB.height = height + BOARDER_SIZE*2;
+
+    DEBUG_MSG("CensusTransform CUDA [%d,%d], [%d,%d], %d, %d\n",x_window_size, y_window_size, width, height, num_buffs, size_buff);
+
+	cutilSafeCall(cudaMallocPitch((void **)(&CensusTransB), &CensusStride, SB.width * BUFF_SIZE, SB.height));
+    DEBUG_MSG("CensusStride1 %d\n", CensusStride);
+	CensusStride /= BUFF_SIZE;
+    DEBUG_MSG("CensusStride2 %d\n", CensusStride);
+
+	cutilSafeCall(cudaMallocPitch((void **)(&SrcImg), &SrcStride, width * PIXEL_SIZE, height));
+    SrcStride /= PIXEL_SIZE;
+    //DEBUG_MSG("SrcStride %d\n", SrcStride);
+
+    //copy source image from host memory to device
+    cutilSafeCall(cudaMemcpy2D(image, SrcStride * PIXEL_SIZE,
+                               SrcImg, width * PIXEL_SIZE,
+                               width * PIXEL_SIZE, height,
+                               cudaMemcpyHostToDevice) );
+
+    CensusTrans = ADD_BOARDER(CensusTransB, CensusStride);
+
+    dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid( ceil((float)width / BLOCK_SIZE), ceil((float)height / BLOCK_SIZE) );
+
+    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
+
+    if (timerCUDA == 0) CreateTimer(&timerCUDA);
+    RestartTimer(timerCUDA);
+    erodeImageByte<<< grid, threads >>>(CensusTransB, SrcImg, SrcStride);
+    StopTimer(timerCUDA);
+
+    cutilSafeCall(cudaMemcpy2D(census_tx, width * BUFF_SIZE,
+    		                    CensusTransB, CensusStride * BUFF_SIZE,
+                                width * BUFF_SIZE, height,
+                                cudaMemcpyDeviceToHost) );
+
+    //clean up memory
+    cutilSafeCall(cudaFree(CensusTransB));
+    cutilSafeCall(cudaFree(SrcImg));
+
+    return GetTimer(timerCUDA);
+
+}
+
 void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array,
 		           int width, int height, int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity) {
   unsigned int right_x;

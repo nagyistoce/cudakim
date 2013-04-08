@@ -48,8 +48,6 @@ static unsigned int timerTotalCUDA = 0;
 *
 * - Gausian blurring of foreground images
 */
-void CENSUS_RIGHT (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array, int width, int height,
-		           int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
@@ -155,7 +153,8 @@ main( int argc, char** argv)
         return 1;
     }
 
-    CENSUS_RIGHT(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
+    //CENSUS_RIGHT(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
+	CENSUS_RIGHT_CUDA(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
      		     x_tx_win_size, y_tx_win_size, x_window_size, y_window_size, min_disparity, max_disparity);
 
     DumpBmpAsGrayOffset(DepthMapRefFname, ImgDepthRef, ImgDepthStride, ImgSize, min_disparity);
