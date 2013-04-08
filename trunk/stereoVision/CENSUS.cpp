@@ -41,7 +41,7 @@
 #include <math.h>
 #define COUNT_TABLE_BITS 256
 
-void calc_table (int N, long int start, long int end, unsigned char *table, unsigned char count) {
+static void calc_table (int N, long int start, long int end, unsigned char *table, unsigned char count) {
 
   /*printf("%d\t%d\t%d\t%d\n",N,start,end,count);*/
   if (N == 1) {
@@ -53,16 +53,18 @@ void calc_table (int N, long int start, long int end, unsigned char *table, unsi
   }
 } /* calc_table */
 
-void print_table(unsigned char *count_table, int N) {
+static void print_table(unsigned char *count_table, int N) {
   int i;
   for (i=0; i<N; i++)
     printf("%d\t%d\n",i,*(count_table+i));
 }
 
-void census_transform (unsigned char *image, int x_window_size, int y_window_size, int width, int height, int num_buffs, int size_buff, long int *census_tx) {
+static void census_transform (unsigned char *image, int x_window_size, int y_window_size, int width, int height, int num_buffs, int size_buff, long int *census_tx) {
   int i, j, x_surround, y_surround, top, bottom, left, right, x, y, incr, index, k;
   unsigned char *image_row_ptr, *pix_ptr, *top_corner, centre_val;
   long int *census_ptr;
+
+  printf ("CensusTransform [%d,%d], [%d,%d], %d, %d\n",x_window_size, y_window_size, width, height, num_buffs, size_buff);
 
   x_surround = (x_window_size - 1) / 2; 
   y_surround = (y_window_size - 1) / 2;
@@ -88,15 +90,15 @@ void census_transform (unsigned char *image, int x_window_size, int y_window_siz
 
       k = 0;
       for (i = 0; i < y_window_size; i++) {
-	for (j = 0; j < x_window_size; j++) {   
-	  index = k / size_buff;
-	  *(census_ptr + index) <<= 1;
-	  if (*pix_ptr < centre_val)
-	    *(census_ptr + index) |= 1;
-	  pix_ptr++;
-	  k++;
-	} /* for j */
-	pix_ptr += incr;
+		for (j = 0; j < x_window_size; j++) {
+		  index = k / size_buff;
+		  *(census_ptr + index) <<= 1;
+		  if (*pix_ptr < centre_val)
+			*(census_ptr + index) |= 1;
+		  pix_ptr++;
+		  k++;
+		} /* for j */
+		pix_ptr += incr;
       } /* for i */	
 
       top_corner++;
@@ -107,20 +109,20 @@ void census_transform (unsigned char *image, int x_window_size, int y_window_siz
   } /* for */
 } /* census_transform */
 
-void CENSUS_RIGHT (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array, int width, int height, int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity) {
+void CENSUS_RIGHT (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array,
+		           int width, int height, int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity) {
   unsigned int right_x;
-  int right_lim, left_lim, y, i, top, bottom, left, right, x_surround, y_surround, diff, num_buffs, extra_bits, size_buff, div_buffs, index, u, v, incr, x_surr1, y_surr1;
-  long int *census_left, *census_right, *ptr_censusl, *ptr_censusr, census_l, census_r, bit_left, bit_right, *buff_r, *buff_l, *lptr, *rptr, xor_res;
+  int right_lim, left_lim, y, i, top, bottom, left, right, x_surround, y_surround, diff, num_buffs, extra_bits, size_buff, div_buffs, u, v, incr, x_surr1, y_surr1;
+  long int *census_left, *census_right, *ptr_censusl, *ptr_censusr, census_l, census_r, *buff_r, *buff_l, *lptr, *rptr, xor_res;
   int disp;
 
-  double d; unsigned int ind;
   unsigned char *count_table;
 
   count_table = (unsigned char*) CALLOC(256, sizeof(unsigned char));
   calc_table (COUNT_TABLE_BITS, 0, COUNT_TABLE_BITS-1, count_table, 0);
   /* print_table(count_table,COUNT_TABLE_BITS); */
 
-  size_buff = sizeof(long int) * 8;
+  size_buff = sizeof(long int) * 8; // 32
   div_buffs = (x_census_win_size * y_census_win_size) / size_buff;
   extra_bits = (x_census_win_size * y_census_win_size) % size_buff;
   num_buffs = div_buffs + ((extra_bits > 0)?1:0);
@@ -184,18 +186,7 @@ void CENSUS_RIGHT (unsigned char *left_image, unsigned char *right_image, signed
 	    xor_res = census_l ^ census_r;
 	    for (i = 0; i < sizeof(long int); i++) {
 	      diff += *(count_table + (xor_res & 0x00ff));
-	      xor_res >> 8;
 	    }
-
-	    /*	    for (i = 0; i < size_buff; i++) 
-	      if (xor_res & (1 << i))
-		diff ++; */
-
-	    /*	    d = log10(2);
-	    while (xor_res != 0) {
-	      xor_res -= pow (2, floor (log10(xor_res) / d));
-	      diff++;
-	    }*/
 		
 	    lptr ++;
 	    rptr ++;
