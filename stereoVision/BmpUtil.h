@@ -116,6 +116,7 @@ extern "C"
 	int PreLoadBmp(char *FileName, int *Width, int *Height);
 	void LoadBmpAsGray(char *FileName, int Stride, ROI ImSize, byte *Img);
 	void DumpBmpAsGray(char *FileName, byte *Img, int Stride, ROI ImSize);
+	void DumpBmpAsGrayOffset(char *FileName, signed char *Img, int Stride, ROI ImSize, int offset);
 	void DumpBmpColorMap(char *FileName, byte *Img, int Stride, ROI ImSize, BMPColorMap *Map, int SizeMap);
 	void DumpBlockF(float *PlaneF, int StrideF, char *Fname);
 	void DumpBlock(byte *Plane, int Stride, char *Fname);

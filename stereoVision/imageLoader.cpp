@@ -75,7 +75,9 @@ int
 loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *imgStride, int depth)
 {
     //preload image (acquire dimensions)
-    int ImgWidth, ImgHeight;
+    int ImgWidth, ImgHeight, tmpW, tmpH;
+    ROI imgOrgSize; // Original
+
     byte *imgCur;
     //char *pImageFpath = cutFindFilePath(fileName, path);
     char ImageName[50];
@@ -93,6 +95,13 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
 
         return 1;
     }
+
+    tmpW = ImgWidth % BLOCK_SIZE;
+    if (tmpW > 0)
+    	ImgWidth += BLOCK_SIZE - tmpW;
+    tmpH = ImgHeight % BLOCK_SIZE;
+    if (tmpH > 0)
+    	ImgHeight += BLOCK_SIZE - tmpH;
 
     //check image dimensions are multiples of BLOCK_SIZE
     if (ImgWidth % BLOCK_SIZE != 0 || ImgHeight % BLOCK_SIZE != 0)
@@ -114,9 +123,9 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
     //load sample images
     for (int i = 1; i <= depth; i++)
     {
-    	DEBUG_MSG("Loading image %s [%d,%d] \n", ImageName, ImgWidth, ImgHeight);
+    	DEBUG_MSG("Loading image %s [%d,%d,%d] \n", ImageName, ImgWidth, ImgHeight, *imgStride);
     	sprintf(ImageName, fileName, i);
-    	res = PreLoadBmp(ImageName, &ImgWidth, &ImgHeight);
+    	res = PreLoadBmp(ImageName, &tmpW, &tmpH);
         if (res)
         {
             printf("\nError %d: Image file %s not found or invalid!\n", res, ImageName);
@@ -124,8 +133,11 @@ loadImages(char* fileName, const char* path, byte** imgSrc, ROI* imgSize, int *i
             getchar();
             return 1;
         }
+        imgOrgSize.height = tmpH;
+        imgOrgSize.width = tmpW;
+    	DEBUG_MSG("Loading org image %s [%d,%d] \n", ImageName, tmpW, tmpH, *imgStride);
 
-    	LoadBmpAsGray(ImageName, *imgStride, *imgSize, imgCur);
+    	LoadBmpAsGray(ImageName, *imgStride, imgOrgSize, imgCur);
     	imgCur = NextImage(imgCur, *imgStride, *imgSize);
     }
 

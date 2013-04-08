@@ -496,6 +496,52 @@ void DumpBmpAsGray(char *FileName, byte *Img, int Stride, ROI ImSize)
 	fclose(fp);
 }
 
+void DumpBmpAsGrayOffset(char *FileName, signed char *Img, int Stride, ROI ImSize, int offset)
+{
+	FILE *fp = NULL;
+	fp = fopen(FileName, "wb");
+    if (fp == NULL)
+	{
+    	return;
+    }
+
+	BMPFileHeader FileHeader;
+	BMPInfoHeader InfoHeader;
+
+	//init headers
+	FileHeader._bm_signature = 0x4D42;
+	FileHeader._bm_file_size = 54 + 3 * ImSize.width * ImSize.height;
+	FileHeader._bm_reserved = 0;
+	FileHeader._bm_bitmap_data = 0x36;
+	InfoHeader._bm_bitmap_size = 0;
+	InfoHeader._bm_color_depth = 24;
+	InfoHeader._bm_compressed = 0;
+	InfoHeader._bm_hor_resolution = 0;
+	InfoHeader._bm_image_height = ImSize.height;
+	InfoHeader._bm_image_width = ImSize.width;
+	InfoHeader._bm_info_header_size = 40;
+	InfoHeader._bm_num_colors_used = 0;
+	InfoHeader._bm_num_important_colors = 0;
+	InfoHeader._bm_num_of_planes = 1;
+	InfoHeader._bm_ver_resolution = 0;
+
+	fwrite(&FileHeader, sizeof(BMPFileHeader), 1, fp);
+	fwrite(&InfoHeader, sizeof(BMPInfoHeader), 1, fp);
+
+	for (int i = ImSize.height - 1; i>=0; i--)
+	{
+		for (int j=0; j<ImSize.width; j++)
+		{
+			signed char pixel = Img[i*Stride+j] + offset;
+			fwrite(&pixel, 1, 1, fp);
+			fwrite(&pixel, 1, 1, fp);
+			fwrite(&pixel, 1, 1, fp);
+		}
+	}
+
+	fclose(fp);
+}
+
 
 /**
 **************************************************************************
