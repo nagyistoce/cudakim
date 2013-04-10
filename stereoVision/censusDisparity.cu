@@ -26,7 +26,7 @@
 
 static unsigned int timerCUDA = 0;
 
-static void calc_table (int N, long int start, long int end, unsigned char *table, unsigned char count) {
+static void calc_table(int N, long int start, long int end, unsigned char *table, unsigned char count) {
 
   /*printf("%d\t%d\t%d\t%d\n",N,start,end,count);*/
   if (N == 1) {
@@ -44,12 +44,15 @@ static void print_table(unsigned char *count_table, int N) {
     printf("%d\t%d\n",i,*(count_table+i));
 }
 
-static void census_transform (unsigned char *image, int x_window_size, int y_window_size, int width, int height, int num_buffs, int size_buff, long int *census_tx) {
+static float census_transform(unsigned char *image, int x_window_size, int y_window_size, int width, int height, int num_buffs, int size_buff, long int *census_tx) {
   int i, j, x_surround, y_surround, top, bottom, left, right, x, y, incr, index, k;
   unsigned char *image_row_ptr, *pix_ptr, *top_corner, centre_val;
   long int *census_ptr;
 
   printf ("CensusTransform [%d,%d], [%d,%d], %d, %d\n",x_window_size, y_window_size, width, height, num_buffs, size_buff);
+
+  if (timerCUDA == 0) CreateTimer(&timerCUDA);
+  RestartTimer(timerCUDA);
 
   x_surround = (x_window_size - 1) / 2;
   y_surround = (y_window_size - 1) / 2;
@@ -92,10 +95,15 @@ static void census_transform (unsigned char *image, int x_window_size, int y_win
 
     image_row_ptr += width;
   } /* for */
+
+  StopTimer(timerCUDA);
+  return GetTimer(timerCUDA);
+
 } /* census_transform */
 
+
 __global__ void
-erodeImageByte( byte* dst, byte* src, int width)
+averageTest( long int* census, byte* src, int censusStride, int width, int num_buffs, int x_win_size, int y_win_size, int size_buff)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -108,94 +116,111 @@ erodeImageByte( byte* dst, byte* src, int width)
   byte pix12 = src[row * width + col + 1];
   byte pix21 = src[(row + 1) * width + col];
 
-  // Erode morphological operation
-  float sum = pix01 + pix10 + pix11 + pix12 + pix21;
-  byte pixel = 255;
-  if (sum < 255.0f*5)
-	  pixel = 0;
+  // Average operation
+  long int sum = (pix01 + pix10 + pix11 + pix12 + pix21)/5;
 
-  dst[row * width + col] = pixel;
-
+  census[row * censusStride * num_buffs + col] = sum;
 }
 
+// TODO!!! optimized version using shared memmory!!! see matrixmul_device.cu
 __global__ void
-transformImageByte( long int* census, byte* src, int width)
+censusTransform( long int* census, byte* src, int censusStride, int width, int num_buffs, int x_win_size, int y_win_size, int size_buff)
 {
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
+  int i, j, k, index;
 
-  // read in input data from global memory
-  // Structuring element
-  byte pix01 = src[(row - 1) * width + col];
-  byte pix10 = src[row * width + col - 1];
-  byte pix11 = src[row * width + col];
-  byte pix12 = src[row * width + col + 1];
-  byte pix21 = src[(row + 1) * width + col];
+  // Top left offset of census window
+  int top = (x_win_size - 1) / 2;
+  int left = (y_win_size - 1) / 2;
+  int incr = width - x_win_size;
 
-  // Erode morphological operation
-  float sum = pix01 + pix10 + pix11 + pix12 + pix21;
-  byte pixel = 255;
-  if (sum < 255.0f*5)
-	  pixel = 0;
+  // Center pixel value in census window
+  byte centre_val = src[row * width + col];
 
-  census[row * width + col] = pixel;
+  // Pixel pointer to top left corner of census window
+  byte *pix_ptr = src + ((row - top) * width + col - left);
 
+  // Pointer to census transform buffers
+  long int *census_ptr = census + (row * censusStride * num_buffs + col);
+  // Initialize census transform buffer to 0
+  for (i = 0; i < num_buffs; i++) census_ptr[i] = 0;
+
+  // Performs census transform of window size
+  k = 0;
+  for (i = 0; i < y_win_size; i++) {
+	for (j = 0; j < x_win_size; j++) {
+	  index = k / size_buff;
+	  *(census_ptr + index) <<= 1;
+	  if (*pix_ptr < centre_val)
+		*(census_ptr + index) |= 1;
+	  pix_ptr++;
+	  k++;
+	}
+	pix_ptr += incr;
+  }
 }
 
 #define BUFF_SIZE (num_buffs * sizeof(long int))
 #define PIXEL_SIZE sizeof(byte)
-#define BOARDER_SIZE		4 // Additional boarder added to image for census transform
-#define ADD_BOARDER(ptr, stride) (ptr + stride*BOARDER_SIZE*BUFF_SIZE + BOARDER_SIZE*BUFF_SIZE);
+#define ADD_BOARDER(ptr, width) (ptr + width*BOARDER_SIZE + BOARDER_SIZE*BUFF_SIZE);
 
 static float census_transform_cuda (unsigned char *image, int x_window_size, int y_window_size, int width, int height,
 		                            int num_buffs, int size_buff, long int *census_tx)
 {
-    byte  *CensusTrans, *SrcImg, *CensusTransB;
-    size_t SrcStride, CensusStride;
+    byte *SrcImg;
+    long int *CensusTrans, *CensusTransB;
+    size_t SrcStride, CensusStride, CensusWidth;
     ROI SB; // Size of image with and without black boarder
+    int BOARDER_SIZE = (x_window_size - 1)/2; // Boarder size
 
     SB.width = width + BOARDER_SIZE*2; // Add black boarders to allocated device image memory buffers
     SB.height = height + BOARDER_SIZE*2;
 
-    DEBUG_MSG("CensusTransform CUDA [%d,%d], [%d,%d], %d, %d\n",x_window_size, y_window_size, width, height, num_buffs, size_buff);
+    DEBUG_MSG("CensusTransform [%d,%d], [%d,%d], %d, %d\n", width, height, x_window_size, y_window_size, num_buffs, size_buff);
 
-	cutilSafeCall(cudaMallocPitch((void **)(&CensusTransB), &CensusStride, SB.width * BUFF_SIZE, SB.height));
-    DEBUG_MSG("CensusStride1 %d\n", CensusStride);
-	CensusStride /= BUFF_SIZE;
-    DEBUG_MSG("CensusStride2 %d\n", CensusStride);
+    if (y_window_size > x_window_size)
+    	  printf("Census y_window_size [%d] must less or equal to x_window_size [%d]\n", y_window_size, x_window_size);
+
+    if (timerCUDA == 0) CreateTimer(&timerCUDA);
+    RestartTimer(timerCUDA);
+
+    cutilSafeCall(cudaMallocPitch((void **)(&CensusTransB), &CensusStride, SB.width * BUFF_SIZE, SB.height));
+    //DEBUG_MSG("CensusStride %d\n", CensusStride);
+    CensusWidth = CensusStride/sizeof(long int);
+    //DEBUG_MSG("CensusWidth %d\n", CensusWidth);
 
 	cutilSafeCall(cudaMallocPitch((void **)(&SrcImg), &SrcStride, width * PIXEL_SIZE, height));
-    SrcStride /= PIXEL_SIZE;
     //DEBUG_MSG("SrcStride %d\n", SrcStride);
 
     //copy source image from host memory to device
-    cutilSafeCall(cudaMemcpy2D(image, SrcStride * PIXEL_SIZE,
-                               SrcImg, width * PIXEL_SIZE,
+    cutilSafeCall(cudaMemcpy2D(SrcImg, SrcStride,
+                               image, width * PIXEL_SIZE,
                                width * PIXEL_SIZE, height,
                                cudaMemcpyHostToDevice) );
 
-    CensusTrans = ADD_BOARDER(CensusTransB, CensusStride);
+    CensusTrans = ADD_BOARDER(CensusTransB, CensusWidth);
 
     dim3 threads(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid( ceil((float)width / BLOCK_SIZE), ceil((float)height / BLOCK_SIZE) );
 
-    DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
-    DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
+    //DEBUG_MSG("Grid (Blocks)    [%d,%d]\n", grid.x, grid.y);
+    //DEBUG_MSG("Threads in Block [%d,%d]\n", threads.x, threads.y);
 
-    if (timerCUDA == 0) CreateTimer(&timerCUDA);
-    RestartTimer(timerCUDA);
-    erodeImageByte<<< grid, threads >>>(CensusTransB, SrcImg, SrcStride);
-    StopTimer(timerCUDA);
+    DEBUG_MSG("kernel censusTransform [%d,%d], [%d,%d], %d, %d\n", CensusWidth, SrcStride, x_window_size, y_window_size, num_buffs, size_buff);
+    // Performs census transform using data parallel computing NVIDIA graphics card
+    censusTransform<<< grid, threads >>>(CensusTrans, SrcImg, CensusWidth, SrcStride, num_buffs, x_window_size, y_window_size, size_buff);
 
+    // Copy census transform from device memory to host memory
     cutilSafeCall(cudaMemcpy2D(census_tx, width * BUFF_SIZE,
-    		                    CensusTransB, CensusStride * BUFF_SIZE,
+    		                    CensusTrans, CensusStride,
                                 width * BUFF_SIZE, height,
                                 cudaMemcpyDeviceToHost) );
-
     //clean up memory
     cutilSafeCall(cudaFree(CensusTransB));
     cutilSafeCall(cudaFree(SrcImg));
 
+    StopTimer(timerCUDA);
     return GetTimer(timerCUDA);
 
 }
@@ -206,8 +231,11 @@ void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, s
   int right_lim, left_lim, y, i, top, bottom, left, right, x_surround, y_surround, diff, num_buffs, extra_bits, size_buff, div_buffs, u, v, incr, x_surr1, y_surr1;
   long int *census_left, *census_right, *ptr_censusl, *ptr_censusr, census_l, census_r, *buff_r, *buff_l, *lptr, *rptr, xor_res;
   int disp;
+  float timeCUDA;
 
   unsigned char *count_table;
+
+  DEBUG_MSG("CENSUS_RIGHT_CUDA\n");
 
   count_table = (unsigned char*) CALLOC(256, sizeof(unsigned char));
   calc_table (COUNT_TABLE_BITS, 0, COUNT_TABLE_BITS-1, count_table, 0);
@@ -222,9 +250,15 @@ void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, s
   buff_r = (long int*) CALLOC(num_buffs, sizeof(long int));
 
   census_left = (long int*) CALLOC(width * height * num_buffs, sizeof(long int));
-  census_transform (left_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_left);
+  timeCUDA = census_transform_cuda (left_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_left);
+  // Doesn't seem to be faster at all using CUDA in this case ?????
+  //timeCUDA = census_transform (left_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_left);
+  printf("Processing time of left image census transform (cuda)  : %f ms \n", timeCUDA);
+
   census_right = (long int*) CALLOC(width * height * num_buffs, sizeof(long int));
-  census_transform (right_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_right);
+  timeCUDA = census_transform_cuda (right_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_right);
+  //timeCUDA = census_transform (right_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_right);
+  printf("Processing time of right image census transform (cuda) : %f ms \n", timeCUDA);
 
   x_surround = (x_window_size - 1) / 2;
   y_surround = (y_window_size - 1) / 2;
