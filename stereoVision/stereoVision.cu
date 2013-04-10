@@ -163,8 +163,9 @@ main( int argc, char** argv)
     DumpBmpAsGrayOffset(DepthMapRefFname, ImgDepthRef, ImgDepthStride, ImgSize, min_disparity);
 #endif
 
-	CENSUS_RIGHT_CUDA(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
+    TimeCUDA = CENSUS_RIGHT_CUDA(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
      		     x_tx_win_size, y_tx_win_size, x_window_size, y_window_size, min_disparity, max_disparity);
+    TimeTotal += TimeCUDA;
 
     // Save cuda computed depth map image in file
     // Dump result of finding stereo depth map
