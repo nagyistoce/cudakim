@@ -17,7 +17,7 @@ float CensusDisparity(byte *ImgDst, byte *ImgSrc, ROI Size, int Stride, int dept
 
 void CENSUS_RIGHT (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array, int width, int height,
 		           int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity);
-void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array, int width, int height,
+float CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array, int width, int height,
 		                int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity);
 
 #endif /* CENSUSDISPARITY_H_ */

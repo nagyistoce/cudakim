@@ -122,7 +122,54 @@ averageTest( long int* census, byte* src, int censusStride, int width, int num_b
   census[row * censusStride * num_buffs + col] = sum;
 }
 
-// TODO!!! optimized version using shared memmory!!! see matrixmul_device.cu
+// optimized version using shared memmory!!! see matrixmul_device.cu, not completely working and not faster!!!
+__global__ void
+censusTransformShare( long int* census, byte* src, int censusStride, int width, int num_buffs, int x_win_size, int y_win_size, int size_buff)
+{
+  // Using shared memory
+  __shared__ byte pixels[BLOCK_SIZE][BLOCK_SIZE];
+
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+  int tx = threadIdx.x; int ty = threadIdx.y;
+  int i, j, k, index;
+
+  // Top left offset of census window
+  int top = (x_win_size - 1) / 2;
+  int left = (y_win_size - 1) / 2;
+  int incr = width - x_win_size;
+
+  // Center pixel value in census window
+  byte centre_val = src[row * width + col];
+
+  // Pixel pointer to top left corner of census window
+  byte *pix_ptr = src + ((row - top) * width + col - left);
+
+  // Pointer to census transform buffers
+  long int *census_ptr = census + (row * censusStride * num_buffs + col);
+  // Initialize census transform buffer to 0
+  for (i = 0; i < num_buffs; i++) census_ptr[i] = 0;
+
+  // Performs census transform of window size
+  k = 0;
+  for (i = 0; i < y_win_size; i++) {
+    pixels[ty][tx] = *pix_ptr;
+   __syncthreads();
+
+    // x_win_size must be < BLOCK_SIZE
+	for (j = 0; j < x_win_size; j++) {
+	  index = k / size_buff;
+	  *(census_ptr + index) <<= 1;
+	  if (pixels[j][tx] < centre_val)
+		*(census_ptr + index) |= 1;
+	  pix_ptr++;
+	  k++;
+	}
+	pix_ptr += incr;
+    __syncthreads();
+  }
+}
+
 __global__ void
 censusTransform( long int* census, byte* src, int censusStride, int width, int num_buffs, int x_win_size, int y_win_size, int size_buff)
 {
@@ -210,6 +257,7 @@ static float census_transform_cuda (unsigned char *image, int x_window_size, int
     DEBUG_MSG("kernel censusTransform [%d,%d], [%d,%d], %d, %d\n", CensusWidth, SrcStride, x_window_size, y_window_size, num_buffs, size_buff);
     // Performs census transform using data parallel computing NVIDIA graphics card
     censusTransform<<< grid, threads >>>(CensusTrans, SrcImg, CensusWidth, SrcStride, num_buffs, x_window_size, y_window_size, size_buff);
+    //censusTransformShare<<< grid, threads >>>(CensusTrans, SrcImg, CensusWidth, SrcStride, num_buffs, x_window_size, y_window_size, size_buff);
 
     // Copy census transform from device memory to host memory
     cutilSafeCall(cudaMemcpy2D(census_tx, width * BUFF_SIZE,
@@ -225,13 +273,13 @@ static float census_transform_cuda (unsigned char *image, int x_window_size, int
 
 }
 
-void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array,
+float CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, signed char *disparity, double *min_array,
 		           int width, int height, int x_census_win_size, int y_census_win_size, int x_window_size, int y_window_size, int min_disparity, int max_disparity) {
   unsigned int right_x;
   int right_lim, left_lim, y, i, top, bottom, left, right, x_surround, y_surround, diff, num_buffs, extra_bits, size_buff, div_buffs, u, v, incr, x_surr1, y_surr1;
   long int *census_left, *census_right, *ptr_censusl, *ptr_censusr, census_l, census_r, *buff_r, *buff_l, *lptr, *rptr, xor_res;
   int disp;
-  float timeCUDA;
+  float timeCUDA, totalTime = 0;
 
   unsigned char *count_table;
 
@@ -254,11 +302,13 @@ void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, s
   // Doesn't seem to be faster at all using CUDA in this case ?????
   //timeCUDA = census_transform (left_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_left);
   printf("Processing time of left image census transform (cuda)  : %f ms \n", timeCUDA);
+  totalTime += timeCUDA;
 
   census_right = (long int*) CALLOC(width * height * num_buffs, sizeof(long int));
   timeCUDA = census_transform_cuda (right_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_right);
   //timeCUDA = census_transform (right_image, x_census_win_size, y_census_win_size, width, height, num_buffs, size_buff, census_right);
   printf("Processing time of right image census transform (cuda) : %f ms \n", timeCUDA);
+  totalTime += timeCUDA;
 
   x_surround = (x_window_size - 1) / 2;
   y_surround = (y_window_size - 1) / 2;
@@ -276,7 +326,7 @@ void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, s
 
   for (disp = min_disparity; disp < max_disparity; disp++) {
 
-	printf ("Disparity %d\n",disp);
+	//printf ("Disparity %d\n",disp);
 
     for (y = top; y < bottom; y++) {
 
@@ -333,7 +383,9 @@ void CENSUS_RIGHT_CUDA (unsigned char *left_image, unsigned char *right_image, s
   free (buff_l); free(buff_r);
   free (census_left); free(census_right);
 
-  printf("Census Right completed\n");
+  printf("CUDA Census Right completed\n");
+
+  return totalTime;
 } /* CENSUS_RIGHT */
 
 __global__ static void
