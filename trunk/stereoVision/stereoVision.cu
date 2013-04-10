@@ -72,6 +72,7 @@ main( int argc, char** argv)
     //char ImageFname[] = "data/E45Nord%d.bmp";
     char ImageLeftBWFname[] = "imageLeftBW.bmp";
     char ImageRightBWFname[] = "imageRightBW.bmp";
+    char DepthTestFname[] = "imageDepthTest.bmp";
     char DepthMapFname[] = "imageDepthMap.bmp";
     char DepthMapRefFname[] = "imageDepthMapRef.bmp";
     char BackImageFname[] = "imageBackground.bmp";
@@ -144,7 +145,7 @@ main( int argc, char** argv)
     TimeTotal += TimeCUDA;
     // Save depth map image in file
     // Dump result of finding stereo depth map
-    DumpBmpAsGray(DepthMapFname, ImgDepth, ImgDepthStride, ImgSize);
+    DumpBmpAsGray(DepthTestFname, ImgDepth, ImgDepthStride, ImgSize);
 
     // Create depth map using host processor as reference
     if ((scores = (double*) calloc (ImgSize.width * ImgSize.height, sizeof(double))) == NULL) {
@@ -153,11 +154,21 @@ main( int argc, char** argv)
         return 1;
     }
 
-    //CENSUS_RIGHT(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
+#if 0  // Creates reference "C" version of stereo vision depth map
+    CENSUS_RIGHT(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
+     		     x_tx_win_size, y_tx_win_size, x_window_size, y_window_size, min_disparity, max_disparity);
+
+    // Save reference depth map image in file
+    // Dump result of finding stereo depth map
+    DumpBmpAsGrayOffset(DepthMapRefFname, ImgDepthRef, ImgDepthStride, ImgSize, min_disparity);
+#endif
+
 	CENSUS_RIGHT_CUDA(ImgSrc,  ImgRight, ImgDepthRef, scores, ImgSize.width, ImgSize.height,
      		     x_tx_win_size, y_tx_win_size, x_window_size, y_window_size, min_disparity, max_disparity);
 
-    DumpBmpAsGrayOffset(DepthMapRefFname, ImgDepthRef, ImgDepthStride, ImgSize, min_disparity);
+    // Save cuda computed depth map image in file
+    // Dump result of finding stereo depth map
+    DumpBmpAsGrayOffset(DepthMapFname, ImgDepthRef, ImgDepthStride, ImgSize, min_disparity);
 
     }
 
